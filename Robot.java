@@ -46,8 +46,6 @@ public class Robot extends TimedRobot {
   //buttons and letUps
   final int rollerIn = 4, rollerOut = 5; //leftTrigger, rightTrigger
 
-  boolean letUpRollerIn = true, letUpRollerOut = true;
-
 
   @Override
   public void robotInit() {
@@ -83,20 +81,13 @@ public class Robot extends TimedRobot {
     robot.arcadeDrive(-j.getRawAxis(1),j.getRawAxis(0));
 
 
-    //roller code
-    if(j.getRawButton(rollerIn) && letUpRollerIn) {
-      //code
+    //roller code - may need to be reversed
+    if(j.getRawAxis(rollerIn) > 0.3) {
       roller.set(0.35);
-      letUpRollerIn = false;
-    } else if(!j.getRawButton(rollerIn)) {
-      letUpRollerIn = true;
-    }
-
-    if(j.getRawButton(rollerOut) && letUpRollerOut) {
-      //code
-      letUpRollerOut = false;
-    } else if(!j.getRawButton(rollerOut)) {
-      letUpRollerOut = true;
+    }else if(j.getRawAxis(rollerOut) > 0.3) {
+      roller.set(-0.35);
+    }else{
+      roller.set(0);
     }
 
 
