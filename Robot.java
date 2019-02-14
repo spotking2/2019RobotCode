@@ -93,18 +93,44 @@ public class Robot extends TimedRobot {
 
     //manipulator code
         //Pickup Hatch (Player Station)
+            //if the operation hasn't been canceled-continue
+            //apply slight forward motion??? (to allign with the wall) - probably should be implemented elsewhere
+            //let out rail???
+            //if rail is let out??? apply vacuum
+            //if we have vacuum, send success code & retract rail
+            //or if there is a timeout and we still don't have vacuum, cancel and send error message and return to standard running
 
 
         //Pickup Hatch (Floor)
-
-
+            //if it hasn't been canceled-you may proceed
+            //override movement probably - again, should probably be implemented elsewhere
+            //flop wrist down
+            //if wrist is down, lower the elevator to the proper spot
+            //if the list, establish vacuum
+            //if the new list, return to standard running
+            //if we timeout and it isn't working - "Bad News Bears" (return to standard running)
+    
+    
         //Place Hatch
+            //no cancel = good
+            //???correct elevator position???
+            //???if elevator position is correct??? then extend rail probably
+            //if above, send success code (good vibes)
+            //when canceled (also we should probably have a winch timeout in case of encoder failure) then bleed vacuum and retract rail
+            //if it timed out we should have an error code
+    
 
-
+    /////////////////////////////////////////////////////
+    //I'm thinking that maybe these should be manually selected modes that just changes these operational positions 
+    
         //Pickup Cargo (Floor)
+            //???proper elevator position???
+            //???if above??? then flop wrist
 
 
         //Place Cargo (Rocket Low)
+            //proper elevator height
+            //flop wrist
 
 
         //Place Cargo (Rocket High)
@@ -112,7 +138,9 @@ public class Robot extends TimedRobot {
 
         //Place Cargo (Cargo Ship)
 
-
+/////////////////////////////////////////////////////////
+    
+    
     //valve (climber and grip) code
       //Bleed Vacuum??? (might be other places)
 
@@ -122,10 +150,13 @@ public class Robot extends TimedRobot {
 
     //climbing motor code
       //bring down the arm
+          //transition valves approriately (probably done elsewhere)
+          //start bringing down the arm
 
 
       //winch up the robot
-
+          //if we got vacuum send signal??? or maybe just start winching
+          //either way winch w/ maybe a cancel
 
     //elevator code
       //high
