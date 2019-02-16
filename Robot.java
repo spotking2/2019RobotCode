@@ -44,7 +44,7 @@ public class Robot extends TimedRobot {
   TalonSRX rail;
 
   Spark vacuumPump;
-  Relay solenoidA; 
+  Relay solenoidA; //let's get more symbolic names for these
   Relay solenoidB;
 
   SpeedControllerGroup left;
@@ -88,8 +88,9 @@ public class Robot extends TimedRobot {
 
   //place holders
   int elevatorNum, rollerNum, wristNum, railNum, vacuumPumpNum, solenoidANum, solenoidBNum, vacuumThreshold = 280/*(?)*/, vacuumHatchThreshold = 589, railIn, railOut;
-  double elevatorHighPoition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch/cargo floor pickup*/, wristultraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHightPosition/*hatch cargoship/low rocket, cargo low*/, wristTolerance, elevatorTolerance;
- 
+  double elevatorHighPoition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch/cargo floor pickup*/, wristultraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHighPosition/*hatch cargoship/low rocket, cargo low*/, wristTolerance, elevatorTolerance;
+
+  private static final boolean elevatorEnable = true;//a boolean that enables and disables the elevator motion (to handle pre-elevator movement)
 
   @Override
   public void robotInit() {
@@ -147,6 +148,7 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousPeriodic() {
+    SRF_Control();
   }
 
   @Override
@@ -156,6 +158,11 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
+    SRF_Control();
+  }
+
+  //the thing we use to drive the robot
+  public void SRF_Control() {
     
     //drive code
     robot.arcadeDrive(-j.getRawAxis(1),j.getRawAxis(0));
@@ -178,7 +185,7 @@ public class Robot extends TimedRobot {
     if(progHatchPickupP) {
       solenoidA.set(Relay.Value.kOn);
       if(vacuumSensor.get() < vacuumHatchThreshold) {
-        //rumble code
+        //rumblecode
         progHatchPickupP = false;
       }
     }
@@ -187,15 +194,16 @@ public class Robot extends TimedRobot {
             //if we have vacuum, send success code
             //or if there is a timeout and we still don't have vacuum, cancel and send error message and return to standard running
 
-   
+    //we can only do floor pickup if the elevator is enabled
     //Pickup Hatch (Floor) - I made a lovely tree :)))))))))))
-    if(j.getRawButton(hatchPickupF) && !progHatchPickupF) {
+    if(j.getRawButton(hatchPickupF) && !progHatchPickupF && elevatorEnable) {
       progHatchPickupF = true;
       letUpHatchPickupF = false;
     } else if (!j.getRawButton(hatchPickupF)) {
       letUpHatchPickupF = true;
-    }
+    }//this else if might need to be a seperate if, we should break down logic to verify
     if(progHatchPickupF) {
+      
       elevator.set(ControlMode.Position, elevatorSemiLowPosition);
 
       if(Math.abs(elevator.getSelectedSensorPosition()-elevatorSemiLowPosition) < elevatorTolerance) {
@@ -210,7 +218,7 @@ public class Robot extends TimedRobot {
               if(vacuumSensor.get() < vacuumHatchThreshold) {
               //rumble code
               //reset Code
-              progHatchPickupF = false;
+                progHatchPickupF = false;
               }
             }
           }
@@ -231,7 +239,21 @@ public class Robot extends TimedRobot {
       progHatchPlaceL = true;
     }
     if(progHatchPlaceL) {
-      progHatchPlaceL = false;
+      if(elevatorEnable)//if the elevator is enabled, it can be moved
+        elevator.set(ControlMode.Position, elevatorMiddlePosition);
+      
+      if(!elevatorEnable || Math.abs(elevator.getSelectedSensorPosition()-elevatorMiddlePosition) < elevatorTolerance)//if the elevator isn't enabled or we're in the right place, then we're good to go
+      {
+        rail.set(ControlMode.PercentOutput,0.35);
+
+        if(rail.getSelectedSensorPosition() > railOut)
+        {
+          //bleed vacuum here - XXX
+
+          if(vacuumSensor.get() > vacuumHatchThreshold)//We might want this to be vacuum threshold but I'm not sure yet (also at tag RAS)-Scott
+            progHatchPlaceL = false;
+        }
+      }
     }
             //no cancel = good
             //???correct elevator position???
@@ -239,16 +261,28 @@ public class Robot extends TimedRobot {
             //if above, send success code (good vibes)
             //when canceled (also we should probably have a winch timeout in case of encoder failure) then bleed vacuum and retract rail
             //if it timed out we should have an error code
+
+
     //place hatch (high)
-    if(j.getRawButton(hatchPlaceH) && !progHatchPlaceH) {
+    if(j.getRawButton(hatchPlaceH) && !progHatchPlaceH && elevatorEnable) { //RAS
       progHatchPlaceH = true;
     }
     if(progHatchPlaceH) {
-      progHatchPlaceH = false;
+      if(elevatorEnable)
+        elevator.set(ControlMode.PercentOutput, elevatorHighPoition);
+
+      if(!elevatorEnable || Math.abs(elevator.getSelectedSensorPosition()-elevatorHighPoition) < elevatorTolerance)
+      {
+        //bleed vacuum here - XXX
+
+        if(vacuumSensor.get() > vacuumHatchThreshold)
+          progHatchPlaceH = false;
+      }
     }
 
     /////////////////////////////////////////////////////
     //I'm thinking that maybe these should be manually selected modes that just changes these operational positions 
+    //Or maybe it shouldn't ever be manually changed? 
     
     //Pickup Cargo (Floor)
     if(j.getRawButton(cargoPickupF) && !progCargoPickupF) {
@@ -334,7 +368,7 @@ public class Robot extends TimedRobot {
       }
 
       //Cancel + Reset
-      for(boolean b: inProgresses) {
+      for(boolean b: inProgresses) {//does inProgresses ever actually get updated after initialization? If not this might not work
         if(b) {
           progressCount++;
         }
@@ -362,9 +396,9 @@ public class Robot extends TimedRobot {
         solenoidA.setDirection(Relay.Direction.kForward);
 
         //set the set points back to standard running mode(finishlogic making them return to default in order(wrist, rail, elevator))
-        wrist.set(ControlMode.Position, wristHightPosition);
+        wrist.set(ControlMode.Position, wristHighPosition);
         elevator.set(ControlMode.Position, elevatorLowPosition);
-        if(rail.getSelectedSensorPosition() > railIn ) {
+        if(rail.getSelectedSensorPosition() > railIn ) { //I think we may need to control rail outside of this if statement, as it is it will only set it to come in and won't check it to stop (might have missed something thoug, I haven't looked at this super closely yet)
           //rail in
         }
       }
