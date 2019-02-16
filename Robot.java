@@ -6,6 +6,10 @@ import com.ctre.phoenix.motorcontrol.FeedbackDevice;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.ctre.phoenix.motorcontrol.can.VictorSPX;
 
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.Relay;
 import edu.wpi.first.wpilibj.Spark;
@@ -20,8 +24,12 @@ import frc.robot.SRF_PID;
 
 
 public class Robot extends TimedRobot {
+/*
+  added some new positions for elevator and wrist after talking with Nick
+  have confirmation button press before release of hatch for all functions (tap button 2nd time)
+*/
 
-  //DriveBase Initialization
+  //Initialization
   Talon frontLeft;
   Talon rearLeft;
   Talon frontRight;
@@ -36,7 +44,7 @@ public class Robot extends TimedRobot {
   TalonSRX rail;
 
   Spark vacuumPump;
-  Relay solenoidA; // define this crap ---------------------------------------------------------------------------------------
+  Relay solenoidA; 
   Relay solenoidB;
 
   SpeedControllerGroup left;
@@ -45,17 +53,30 @@ public class Robot extends TimedRobot {
   DifferentialDrive robot;
   Joystick j;
 
+  
+
+  //Sensors
+  DigitalInput elevatorHigh;
+  DigitalInput elevatorLow;
+  
+  //Do we want encoder for each side???
+  Encoder vacuumSensor; 
+  Encoder leftSide;
+  Encoder rightSide;
+
   //buttons and progs
   int rollerIn = 4, rollerOut = 5, hatchPickupP = 2, hatchPickupF, hatchPlaceH, hatchPlaceL; //leftTrigger, rightTrigger
-  int climbMotor, climbWinch, cargoPickup, cargoPlaceRL, cargoPlaceRH, cargoPlaceC;
+  int climbMotor, cargoPickupF, cargoPickupP, cargoPlaceRL, cargoPlaceRH, cargoPlaceC;
   int elevatorH, elevatorL;
 
-  boolean progHatchPickupP = false, progHatchPickupF = false, progHatchPlaceH = false, progCargoPickup = false;
+  boolean progHatchPickupP = false, progHatchPickupF = false, progHatchPlaceH = false, progCargoPickupF = false;
   boolean progCargoPlaceRL = false, progCargoPlaceRH = false, progCargoPlaceC = false, progClimbMotor = false;
   boolean progClimbWinch = false, progElevatorH = false, progElevatorL = false, progHatchPlaceL = false;
-  boolean progCancel = false;
+  boolean progCancel = false, progCargoPickupP;
+  
+  boolean letUpClimb = true, letUpHatchPickupF;//used for confirmation press
 
-  boolean[] inProgresses = new boolean[] {progHatchPickupP, progHatchPickupF, progHatchPlaceH, progCargoPickup, progCargoPlaceRL, progCargoPlaceRH, progCargoPlaceC, progClimbMotor, progClimbWinch, progElevatorH, progElevatorL, progHatchPlaceL};
+  boolean[] inProgresses = new boolean[] {progHatchPickupP, progHatchPickupF, progHatchPlaceH, progCargoPickupF, progCargoPickupP, progCargoPlaceRL, progCargoPlaceRH, progCargoPlaceC, progClimbMotor, progClimbWinch, progElevatorH, progElevatorL, progHatchPlaceL};
   int progressCount;
 
   //PID
@@ -63,9 +84,12 @@ public class Robot extends TimedRobot {
 
   //misc
   double elevatorInput, wristInput;
+  NetworkTable table;
 
   //place holders
-  int elevatorNum, rollerNum, wristNum, railNum, vacuumPumpNum, solenoidANum, solenoidBNum;
+  int elevatorNum, rollerNum, wristNum, railNum, vacuumPumpNum, solenoidANum, solenoidBNum, vacuumThreshold = 280/*(?)*/, vacuumHatchThreshold = 589, railIn, railOut;
+  double elevatorHighPoition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch/cargo floor pickup*/, wristultraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHightPosition/*hatch cargoship/low rocket, cargo low*/, wristTolerance, elevatorTolerance;
+ 
 
   @Override
   public void robotInit() {
@@ -86,6 +110,7 @@ public class Robot extends TimedRobot {
     roller = new VictorSP(rollerNum);
 
     rail = new TalonSRX(railNum);
+    rail.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, 0 , 0);
 
     wrist = new TalonSRX(wristNum);
     wrist.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, 0, 0);
@@ -98,12 +123,22 @@ public class Robot extends TimedRobot {
     elevator.config_kP(0, elevatorP);
     elevator.config_kI(0, elevatorI);
     elevator.config_kD(0, elevatorD);
+    elevator.set(ControlMode.Position, elevatorLowPosition);
 
     vacuumPump = new Spark(vacuumPumpNum);
 
-    solenoidA = new Relay(solenoidANum);
+    //Spike direction choosen at random, may need to be changed/not be neccasary
+    //Written with following presumption:
+    //solenoidA forward = isolation valve for manipulater
+    //solenoidA reverse = isolation valve for climber
+    //solenoidB forward = manipulater release valve
+    //solenoidB reverse = extra channel
+    solenoidA = new Relay(solenoidANum, Relay.Direction.kForward);
+    solenoidB = new Relay(solenoidBNum, Relay.Direction.kForward);
 
-    solenoidB = new Relay(solenoidBNum);
+    //misc
+    NetworkTableInstance inst = NetworkTableInstance.getDefault();
+    table = inst.getTable("tableModnar");
   }
 
   @Override
@@ -125,7 +160,6 @@ public class Robot extends TimedRobot {
     //drive code
     robot.arcadeDrive(-j.getRawAxis(1),j.getRawAxis(0));
 
-
     //roller code - may need to be reversed
     if(j.getRawAxis(rollerIn) > 0.3) {
       roller.set(0.35);
@@ -138,8 +172,15 @@ public class Robot extends TimedRobot {
     //manipulator code
 
     //Pickup Hatch (Player Station)
-    if(j.getRawButton(hatchPickupP) && progHatchPickupP){//If B is pressed
-      //vacuum code stuff
+    if(j.getRawButton(hatchPickupP) && !progHatchPickupP){//If B is pressed
+      progHatchPickupP = true;
+    }
+    if(progHatchPickupP) {
+      solenoidA.set(Relay.Value.kOn);
+      if(vacuumSensor.get() < vacuumHatchThreshold) {
+        //rumble code
+        progHatchPickupP = false;
+      }
     }
             //if the operation hasn't been canceled-continue
             //apply slight forward motion??? (to allign with the wall) - probably should be implemented elsewhere
@@ -147,9 +188,34 @@ public class Robot extends TimedRobot {
             //or if there is a timeout and we still don't have vacuum, cancel and send error message and return to standard running
 
    
-    //Pickup Hatch (Floor)
-    if(j.getRawButton(hatchPickupF) && progHatchPickupF) {
+    //Pickup Hatch (Floor) - I made a lovely tree :)))))))))))
+    if(j.getRawButton(hatchPickupF) && !progHatchPickupF) {
+      progHatchPickupF = true;
+      letUpHatchPickupF = false;
+    } else if (!j.getRawButton(hatchPickupF)) {
+      letUpHatchPickupF = true;
+    }
+    if(progHatchPickupF) {
+      elevator.set(ControlMode.Position, elevatorSemiLowPosition);
 
+      if(Math.abs(elevator.getSelectedSensorPosition()-elevatorSemiLowPosition) < elevatorTolerance) {
+        wrist.set(ControlMode.Position, wristLowPosition);
+
+        if(Math.abs(wrist.getSelectedSensorPosition()-wristLowPosition) < wristTolerance) {
+          
+          if(j.getRawButton(hatchPickupF) && letUpHatchPickupF) {
+            elevator.set(ControlMode.Position, elevatorLowPosition);
+            if(Math.abs(elevator.getSelectedSensorPosition()) < elevatorTolerance) {
+              solenoidA.set(Relay.Value.kOn);
+              if(vacuumSensor.get() < vacuumHatchThreshold) {
+              //rumble code
+              //reset Code
+              progHatchPickupF = false;
+              }
+            }
+          }
+        }
+      }
     }
             //if it hasn't been canceled-you may proceed
             //override movement probably - again, should probably be implemented elsewhere
@@ -161,8 +227,11 @@ public class Robot extends TimedRobot {
     
     
         //Place Hatch (low)
-    if(j.getRawButton(hatchPlaceL) && progHatchPlaceL) {
-
+    if(j.getRawButton(hatchPlaceL) && !progHatchPlaceL) {
+      progHatchPlaceL = true;
+    }
+    if(progHatchPlaceL) {
+      progHatchPlaceL = false;
     }
             //no cancel = good
             //???correct elevator position???
@@ -171,37 +240,59 @@ public class Robot extends TimedRobot {
             //when canceled (also we should probably have a winch timeout in case of encoder failure) then bleed vacuum and retract rail
             //if it timed out we should have an error code
     //place hatch (high)
-    if(j.getRawButton(hatchPlaceH) && progHatchPlaceH) {
-
+    if(j.getRawButton(hatchPlaceH) && !progHatchPlaceH) {
+      progHatchPlaceH = true;
+    }
+    if(progHatchPlaceH) {
+      progHatchPlaceH = false;
     }
 
     /////////////////////////////////////////////////////
     //I'm thinking that maybe these should be manually selected modes that just changes these operational positions 
     
-    //Pickup Cargo
-    if(j.getRawButton(cargoPickup) && progCargoPickup) {
-
+    //Pickup Cargo (Floor)
+    if(j.getRawButton(cargoPickupF) && !progCargoPickupF) {
+      progCargoPickupF = true;
+    }
+    if(progCargoPickupF) {
+      progCargoPickupF = false;
     }
         //???proper elevator position???
         //???if above??? then flop wrist
 
+    //Pickup cargo (Player station)
+    if(j.getRawButton(cargoPickupP) && !progCargoPickupP) {
+      progCargoPickupP = true;
+    }
+    if(progCargoPickupP) {
+      progCargoPickupP = false;
+    }
 
     //Place Cargo (Rocket Low)
-    if(j.getRawButton(cargoPlaceRL) && progCargoPlaceRL) {
-
+    if(j.getRawButton(cargoPlaceRL) && !progCargoPlaceRL) {
+      progCargoPlaceRL = true;
+    }
+    if(progCargoPlaceRL) {
+      progCargoPlaceRL = false;
     }
         //proper elevator height
         //flop wrist
 
 
     //Place Cargo (Rocket High)
-    if(j.getRawButton(cargoPlaceRH) && progCargoPlaceRH) {
-
+    if(j.getRawButton(cargoPlaceRH) && !progCargoPlaceRH) {
+      progCargoPlaceRH = true;
+    }
+    if(progCargoPlaceRH) {
+      progCargoPlaceRH = false;
     }
 
     //Place Cargo (Cargo Ship)
-    if(j.getRawButton(cargoPlaceC) && progCargoPlaceC) {
-
+    if(j.getRawButton(cargoPlaceC) && !progCargoPlaceC) {
+      progCargoPlaceC = true;
+    }
+    if(progCargoPlaceC) {
+      progCargoPlaceC = false;
     }
 
 /////////////////////////////////////////////////////////
@@ -209,25 +300,39 @@ public class Robot extends TimedRobot {
     
     //valve (climber and grip) code
       //vacuum always on, open/keep manipulator at start of match
-
+    /*
+    switch directions to choose valve then set value
+    solenoidA.setDirection(direction);
+    solenoidA.set(value);
+    */
 
     //climbing motor code
     
       //bring down the arm
-      if(j.getRawButton(climbMotor) && progClimbMotor) {
-
+      if(j.getRawButton(climbMotor) && !progClimbMotor && letUpClimb) {
+        progClimbMotor = true;
+        letUpClimb = false;
+      } else if(!j.getRawButton(climbMotor)) {
+        letUpClimb = true;
       }
-          //transition valves approriately (probably done elsewhere)
-          //start bringing down the arm
 
+      if(progClimbMotor){
+        //transition valves approriately (probably done elsewhere)
+        //start bringing down the arm
+        //winch up the robot
 
-      //winch up the robot
-      if(j.getRawButton(climbWinch) && progClimbWinch) {
+        if(j.getRawButton(climbMotor) && letUpClimb) {// press button again to activate winch
+          progClimbWinch = true;
+        }
 
+        if(progClimbWinch){
+            //if we got vacuum send signal??? or maybe just start winching
+            //either way winch w/ maybe a cancel
+            progClimbMotor = false;
+            progClimbWinch = false;
+        }
       }
-          //if we got vacuum send signal??? or maybe just start winching
-          //either way winch w/ maybe a cancel
-      
+
       //Cancel + Reset
       for(boolean b: inProgresses) {
         if(b) {
@@ -240,7 +345,33 @@ public class Robot extends TimedRobot {
       }
 
       if(progCancel) {
-        
+        progHatchPickupP = false;
+        progHatchPickupF = false;
+        progHatchPlaceH = false;
+        progCargoPickupF = false;
+        progCargoPickupP = false;
+        progCargoPlaceRL = false;
+        progCargoPlaceRH = false;
+        progCargoPlaceC = false;
+        progClimbMotor = false;
+        progClimbWinch = false;
+        progElevatorH = false;
+        progElevatorL = false;
+        progHatchPlaceL = false;
+
+        solenoidA.setDirection(Relay.Direction.kForward);
+
+        //set the set points back to standard running mode(finishlogic making them return to default in order(wrist, rail, elevator))
+        wrist.set(ControlMode.Position, wristHightPosition);
+        elevator.set(ControlMode.Position, elevatorLowPosition);
+        if(rail.getSelectedSensorPosition() > railIn ) {
+          //rail in
+        }
+      }
+
+      //vacuum - presuming max speed?
+      if(vacuumSensor.get() > vacuumThreshold) {
+        vacuumPump.set(1.0);
       }
 
   }
