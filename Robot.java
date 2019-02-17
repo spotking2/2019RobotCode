@@ -64,17 +64,17 @@ public class Robot extends TimedRobot {
   Encoder rightSide;
 
   //buttons and progs
-  int rollerIn = 4, rollerOut = 5, hatchPickupP = 2, hatchPickupF, hatchPlaceH, hatchPlaceL; //leftTrigger, rightTrigger
+  int rollerIn = 4, rollerOut = 5, hatchPickupP = 2, hatchPickupF, hatchPlaceH, hatchPlaceL; //leftTrigger, rightTrigger, B
   int climbMotor, cargoPickupF, cargoPickupP, cargoPlaceRL, cargoPlaceRH, cargoPlaceC;
   int elevatorH, elevatorL;
 
-  int progHatchPickupP = 0, progHatchPickupF = 1, progHatchPlaceH = 2, progCargoPickupF = 3;
+  int progHatchPickupP = 0, progHatchPickupF = 1, progHatchPlaceH = 2, progCargoPickupF = 3;//array indices for inProgresses
   int progCargoPlaceRL = 4, progCargoPlaceRH = 5, progCargoPlaceC = 6, progClimbMotor = 7;
   int progClimbWinch = 8, progElevatorH = 9, progElevatorL = 10, progHatchPlaceL = 11;
   int progCargoPickupP = 12;
-  boolean progHatchPickupF2 = false, progCancel = false;
+  boolean progHatchPickupF2, progCancel = false;
 
-  boolean[] inProgresses = new boolean[] {false, false, false, false, false, false, false, false, false, false, false, false, false,};
+  boolean[] inProgresses = new boolean[] {false, false, false, false, false, false, false, false, false, false, false, false, false};
   
   boolean letUpClimb = true, letUpHatchPickupF = true, letUpCargoPickupF = true, letUpCargoPickupP = true, letUpCargoPlaceC = true, letUpCargoPlaceRL = true, letUpCargoPlaceRH = true;//used for confirmation press
  
@@ -92,7 +92,11 @@ public class Robot extends TimedRobot {
   double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHighPosition/*hatch cargoship/low rocket, cargo low*/;
   double wristTolerance, elevatorTolerance, railTolerance;
 
-  private static final boolean elevatorEnable = true;//a boolean that enables and disables the elevator motion (to handle pre-elevator movement)
+  private static final boolean elevatorEnable = false;//a boolean that enables and disables the elevator motion (to handle pre-elevator movement)
+  private static final boolean testMode = true;
+  private int testSystem = 0;
+  boolean letUpSystem = true;
+  double testAxis;
 
   @Override
   public void robotInit() {
@@ -142,8 +146,8 @@ public class Robot extends TimedRobot {
     //solenoidA forward = isolation valve for manipulater
     //solenoidA reverse = isolation valve for climber
     //solenoidB forward = manipulater release valve
-    //solenoidB reverse = extra channel
-    solenoidA = new Relay(solenoidANum, Relay.Direction.kForward);
+    //solenoidB reverse = extra channel (is currently disabled as solenoidB can only be run Forwards at the moment)
+    solenoidA = new Relay(solenoidANum);
     solenoidB = new Relay(solenoidBNum, Relay.Direction.kForward);
 
     leftSide = new Encoder(0,1);
@@ -166,8 +170,42 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
-    SRF_Control();
+    if(testMode)
+      SRF_Test();
+    else
+      SRF_Control();
   }
+
+  void SRF_Test(){
+    robot.arcadeDrive(-j.getRawAxis(1),j.getRawAxis(0));
+
+    if(j.getRawButton(1) && letUpSystem) {
+      testSystem++;
+      if(testSystem == 6)
+        testSystem = 0;
+      letUpSystem = false;
+    }
+    else if(!j.getRawButton(1))
+      letUpSystem = true;
+
+    testAxis = j.getRawAxis(5);
+    if(Math.abs(testAxis) > 0.1)
+    {
+      if(testSystem==0)
+        climberArm.set(testAxis);
+      else if(testSystem==1)
+        wrist.set(ControlMode.PercentOutput, testAxis);
+      else if(testSystem==2)
+        roller.set(testAxis);
+      else if(testSystem==3)
+        elevator.set(ControlMode.PercentOutput,testAxis);
+      else if(testSystem==4)
+        rail.set(ControlMode.PercentOutput,testAxis);
+      else
+        vacuumPump.set(testAxis);
+    }
+  }
+
 
   //the thing we use to drive the robot
   public void SRF_Control() {
@@ -191,8 +229,8 @@ public class Robot extends TimedRobot {
       inProgresses[progHatchPickupP] = true;
     }
     if(inProgresses[progHatchPickupP]) {
-      solenoidA.set(Relay.Value.kOn);
-      if(vacuumSensor.get() < vacuumHatchThreshold) {
+      solenoidA.set(Relay.Value.kForward);//open valve to manipulator
+      if(vacuumSensor.getValue() < vacuumHatchThreshold) {
         //rumblecode
         inProgresses[progHatchPickupP] = false;
       }
@@ -203,15 +241,16 @@ public class Robot extends TimedRobot {
             //or if there is a timeout and we still don't have vacuum, cancel and send error message and return to standard running
 
     //we can only do floor pickup if the elevator is enabled
+
+
     //Pickup Hatch (Floor) - I made a lovely tree :)))))))))))
-    if(j.getRawButton(hatchPickupF) && !inProgresses[progHatchPickupF] && elevatorEnable) {
+    if(j.getRawButton(hatchPickupF) && !inProgresses[progHatchPickupF] && elevatorEnable && letUpHatchPickupF) {
       inProgresses[progHatchPickupF] = true;
       letUpHatchPickupF = false;
     } else if (!j.getRawButton(hatchPickupF)) {
       letUpHatchPickupF = true;
     }//this else if might need to be a seperate if, we should break down logic to verify
-    if(inProgresses[progHatchPickupF]) {
-      
+    if(inProgresses[progHatchPickupF] && !progHatchPickupF2) { 
       elevator.set(ControlMode.Position, elevatorSemiLowPosition);
 
       if(Math.abs(elevator.getSelectedSensorPosition()-elevatorSemiLowPosition) < elevatorTolerance) {
@@ -222,20 +261,20 @@ public class Robot extends TimedRobot {
           if(j.getRawButton(hatchPickupF) && letUpHatchPickupF) {
             progHatchPickupF2 = true;
           }
-          if(progHatchPickupF2) {
-            elevator.set(ControlMode.Position, elevatorLowPosition);
+        }
+      }
+    }
+    if(progHatchPickupF2) {//I moved this out so that we wouldn't have the two elevator.set statements interfering with eachother - NEW
+      elevator.set(ControlMode.Position, elevatorLowPosition);
 
-            if(Math.abs(elevator.getSelectedSensorPosition()) < elevatorTolerance) {
-              solenoidA.set(Relay.Value.kOn);
+      if(Math.abs(elevator.getSelectedSensorPosition()) < elevatorTolerance) {
+        solenoidA.set(Relay.Value.kForward);
 
-              if(vacuumSensor.get() < vacuumHatchThreshold) {
-              //rumble code
-                inProgresses[progHatchPickupF] = false;
-                progHatchPickupF2 = false;
-                progCancel = true;
-              }
-            }
-          }
+        if(vacuumSensor.getValue() < vacuumHatchThreshold) {
+        //rumble code
+          inProgresses[progHatchPickupF] = false;
+          progHatchPickupF2 = false;
+          progCancel = true;
         }
       }
     }
@@ -253,15 +292,15 @@ public class Robot extends TimedRobot {
       inProgresses[progHatchPlaceL] = true;
     }
     if(inProgresses[progHatchPlaceL]) {
-
       rail.set(ControlMode.PercentOutput,0.35);
 
       if(rail.getSelectedSensorPosition() > railOut)
       {
+        rail.set(ControlMode.PercentOutput, 0);
         solenoidA.set(Relay.Value.kOff);
         solenoidB.set(Relay.Value.kOn);
 
-        if(vacuumSensor.get() > vacuumHatchThreshold) {//We might want this to be vacuum threshold but I'm not sure yet (also at tag RAS)-Scott
+        if(vacuumSensor.getValue() > vacuumHatchThreshold) {//We might want this to be vacuum threshold but I'm not sure yet (also at tag RAS)-Scott
           inProgresses[progHatchPlaceL] = false;
           progCancel = true;
         }
@@ -276,21 +315,20 @@ public class Robot extends TimedRobot {
 
 
     //place hatch (high)
-    if(j.getRawButton(hatchPlaceH) && !inProgresses[progHatchPlaceH] && elevatorEnable) { //RAS
+    if(elevatorEnable && j.getRawButton(hatchPlaceH) && !inProgresses[progHatchPlaceH]) { //RAS
       inProgresses[progHatchPlaceH] = true;
     }
     if(inProgresses[progHatchPlaceH]) {
       if(elevatorEnable)
-        elevator.set(ControlMode.PercentOutput, elevatorHighPosition);
+        elevator.set(ControlMode.Position, elevatorHighPosition);
 
-      if(!elevatorEnable || Math.abs(elevator.getSelectedSensorPosition()-elevatorHighPosition) < elevatorTolerance)
-      {
+      if(!elevatorEnable || Math.abs(elevator.getSelectedSensorPosition()-elevatorHighPosition) < elevatorTolerance) {
 
         if(Math.abs(rail.getSelectedSensorPosition() - railOut) < elevatorTolerance) {
           solenoidB.set(Relay.Value.kOn);
           solenoidA.set(Relay.Value.kOff);
 
-          if(vacuumSensor.get() > vacuumHatchThreshold) {
+          if(vacuumSensor.getValue() > vacuumHatchThreshold) {
             inProgresses[progHatchPlaceH] = false;
             progCancel = true;
           }
@@ -417,7 +455,6 @@ public class Robot extends TimedRobot {
           }
         }
       }
-      
     }
 
 /////////////////////////////////////////////////////////
@@ -437,15 +474,15 @@ public class Robot extends TimedRobot {
         climberArm.set(j.getRawAxis(5));
         solenoidA.setDirection(Relay.Direction.kReverse);
         solenoidB.set(Relay.Value.kOn);
-        if(vacuumSensor.get() < vacuumThreshold) {
+        if(vacuumSensor.getValue() < vacuumThreshold) {
           //controller rumble
           if(j.getRawButton(climbMotor) && letUpClimb) {// press button again to activate winch
             inProgresses[progClimbWinch] = true;
           }
           if(inProgresses[progClimbWinch]){
-              climberWinch.set(j.getRawAxis(5));
-              inProgresses[progClimbMotor] = false;
-              inProgresses[progClimbWinch] = false;
+            climberWinch.set(j.getRawAxis(5));
+            inProgresses[progClimbMotor] = false;
+            inProgresses[progClimbWinch] = false;
           }
         }
       }
@@ -461,7 +498,11 @@ public class Robot extends TimedRobot {
         }
       }
 
-      if(progCancel) {
+      //SRF_PID get the kP out of that
+
+      //Exterior Rail control - XXX
+
+      if(progCancel) { //add timeout here - XXX
         inProgresses[progHatchPickupP] = false;
         inProgresses[progHatchPickupF] = false;
         inProgresses[progHatchPlaceH] = false;
@@ -498,7 +539,7 @@ public class Robot extends TimedRobot {
       }
 
       //vacuum - presuming max speed?
-      if(vacuumSensor.get() > vacuumThreshold) {
+      if(vacuumSensor.getValue() > vacuumThreshold) {
         vacuumPump.set(1.0);
       }
 
