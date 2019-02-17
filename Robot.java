@@ -8,6 +8,7 @@ import com.ctre.phoenix.motorcontrol.can.VictorSPX;
 
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
@@ -40,7 +41,7 @@ public class Robot extends TimedRobot {
 
   TalonSRX wrist;
   VictorSP roller;
-  VictorSPX elevator;
+  TalonSRX elevator;
   TalonSRX rail;
 
   Spark vacuumPump;
@@ -53,14 +54,12 @@ public class Robot extends TimedRobot {
   DifferentialDrive robot;
   Joystick j;
 
-  
-
   //Sensors
   DigitalInput elevatorHigh;
   DigitalInput elevatorLow;
   
   //Do we want encoder for each side???
-  Encoder vacuumSensor; 
+  AnalogInput vacuumSensor;
   Encoder leftSide;
   Encoder rightSide;
 
@@ -89,7 +88,7 @@ public class Robot extends TimedRobot {
   NetworkTable table;
 
   //place holders
-  int elevatorNum, rollerNum, wristNum, railNum, vacuumPumpNum, solenoidANum, solenoidBNum, climberArmNum, climberWinchNum, vacuumThreshold = 280/*(?)*/, vacuumHatchThreshold = 589, railIn, railOut;
+  int elevatorNum, rollerNum, wristNum, railNum, vacuumPumpNum, vacuumSensorNum, solenoidANum, solenoidBNum, climberArmNum, climberWinchNum, elevatorHighNum, elevatorLowNum, vacuumThreshold = 280/*(?)*/, vacuumHatchThreshold = 589, railIn, railOut;
   double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHighPosition/*hatch cargoship/low rocket, cargo low*/;
   double wristTolerance, elevatorTolerance, railTolerance;
 
@@ -97,6 +96,9 @@ public class Robot extends TimedRobot {
 
   @Override
   public void robotInit() {
+    elevatorHigh = new DigitalInput(elevatorHighNum);
+    elevatorLow = new DigitalInput(elevatorLowNum);
+
     j = new Joystick(0);
 
     //driveBase
@@ -122,7 +124,7 @@ public class Robot extends TimedRobot {
     wrist.config_kI(0, wristI);
     wrist.config_kD(0, wristD);
 
-    elevator = new VictorSPX(elevatorNum);
+    elevator = new TalonSRX(elevatorNum);
     elevator.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, 0, 0);
     elevator.config_kP(0, elevatorP);
     elevator.config_kI(0, elevatorI);
@@ -144,9 +146,8 @@ public class Robot extends TimedRobot {
     solenoidA = new Relay(solenoidANum, Relay.Direction.kForward);
     solenoidB = new Relay(solenoidBNum, Relay.Direction.kForward);
 
-    //misc
-    NetworkTableInstance inst = NetworkTableInstance.getDefault();
-    table = inst.getTable("tableModnar");
+    leftSide = new Encoder(0,1);
+    vacuumSensor = new AnalogInput(vacuumSensorNum);
   }
 
   @Override
