@@ -26,7 +26,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.4
+public class Robot extends TimedRobot {//v1.4.1
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -185,9 +185,9 @@ public class Robot extends TimedRobot {//v1.4
   }
 
   void SRF_Test(){
-    //robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
+    robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
 
-    if(j.getRawButton(1) && letUpSystem) {
+   /* if(j.getRawButton(1) && letUpSystem) {
       testSystem++;
       if(testSystem == 6)
         testSystem = 0;
@@ -203,7 +203,7 @@ public class Robot extends TimedRobot {//v1.4
         //climberArm.set(testAxis);
       //else if(testSystem==1)
         //wrist.set(ControlMode.PercentOutput, testAxis);
-      /*else*/ if(testSystem==2)
+      /*else*//* if(testSystem==2)
         roller.set(testAxis);
       else if(testSystem==3 && elevatorEnable)
         elevator.set(ControlMode.PercentOutput,testAxis);
@@ -221,24 +221,36 @@ public class Robot extends TimedRobot {//v1.4
       elevator.set(ControlMode.PercentOutput,0);
       rail.set(ControlMode.PercentOutput,0);
       vacuumPump.set(0);
-    }
-/*
-    if(j.getRawButton(2))
-      isolationRelay.set(Value.kForward);
-    else if(j.getRawButton(3))
-      isolationRelay.set(Value.kOff);
-*/
-  if(j.getRawButton(5))
+    }*/
+
+    if(j.getRawButton(5))
+      climberArm.set(1);
+      //isolationRelay.set(Value.kForward);
+    else
+      climberArm.set(0);
+      //isolationRelay.set(Value.kOff);
+
+/*  if(j.getRawButton(5))
     relayOn = true;
   else if(j.getRawButton(6))
     relayOn = false;
+*/
+    if(j.getRawButton(4))
+      vacuumPump.set(1);
+    else
+      vacuumPump.set(0);
 
+    if(Math.abs(j.getRawAxis(5)) > 0.2)
+      roller.set(j.getRawAxis(5));
+    else
+      roller.set(0);
 
-  if(relayOn)
+/*  if(relayOn)
     bleedRelay.set(Value.kForward);
   else
     bleedRelay.set(Value.kOff);
-
+*/
+    SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
     SmartDashboard.putNumber("testSystem",testSystem);
   }
 
@@ -322,10 +334,10 @@ public class Robot extends TimedRobot {//v1.4
             //if the list, establish vacuum
             //if the new list, return to standard running
             //if we timeout and it isn't working - "Bad News Bears" (return to standard running)
-    
+        //BRB
         //XXX - will this need elevator code?
-        //Place Hatch (low)
-    if(j.getRawButton(hatchPlaceL) && !inProgresses[progHatchPlaceL]) {
+        //Place Hatch (low)/*
+   /* if(j.getRawButton(hatchPlaceL) && !inProgresses[progHatchPlaceL]) {
       inProgresses[progHatchPlaceL] = true;
     }
     if(inProgresses[progHatchPlaceL]) {
@@ -341,7 +353,7 @@ public class Robot extends TimedRobot {//v1.4
           progCancel = true;
         }
       }
-    }
+    }*/
             //no cancel = good
             //???correct elevator position???
             //???if elevator position is correct??? then extend rail probably
