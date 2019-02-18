@@ -24,7 +24,7 @@ import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//2.0
+public class Robot extends TimedRobot {//v1.2
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -45,8 +45,8 @@ public class Robot extends TimedRobot {//2.0
   TalonSRX rail;
 
   Spark vacuumPump;
-  Relay solenoidA; //let's get more symbolic names for these
-  Relay solenoidB;
+  Relay isolationRelay; //let's get more symbolic names for these
+  Relay bleedRelay;
 
   SpeedControllerGroup left;
   SpeedControllerGroup right;
@@ -61,7 +61,7 @@ public class Robot extends TimedRobot {//2.0
   //Do we want encoder for each side???
   AnalogInput vacuumSensor;
   Encoder leftSide;
-  //Encoder rightSide;
+  Encoder rightSide;
 
   //buttons and progs
   int rollerIn = 4, rollerOut = 5, hatchPickupP = 2, hatchPickupF, hatchPlaceH, hatchPlaceL; //leftTrigger, rightTrigger, B
@@ -88,7 +88,7 @@ public class Robot extends TimedRobot {//2.0
   NetworkTable table;
 
   //place holders
-  int elevatorNum = 0, rollerNum = 7, wristNum = 2, railNum = 1, vacuumPumpNum = 4, vacuumSensorNum = 0, solenoidANum = 0, solenoidBNum = 1, climberArmNum = 6, climberWinchNum = 5, elevatorHighNum = 0, elevatorLowNum = 1, vacuumThreshold = 280/*(?)*/, vacuumHatchThreshold = 589, railIn, railOut;
+  int elevatorNum, rollerNum, wristNum, railNum, vacuumPumpNum, vacuumSensorNum, isolationRelayNum, bleedRelayNum, climberArmNum, climberWinchNum, elevatorHighNum, elevatorLowNum, vacuumThreshold = 340/*(?)*/, vacuumHatchThreshold = 589, vacuumReleaseThreshold = 837, railIn, railOut;
   double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHighPosition/*hatch cargoship/low rocket, cargo low*/;
   double wristTolerance, elevatorTolerance, railTolerance;
 
@@ -97,6 +97,7 @@ public class Robot extends TimedRobot {//2.0
   private int testSystem = 0;
   boolean letUpSystem = true;
   double testAxis;
+  int targetRailPosition = railIn;
 
   @Override
   public void robotInit() {
@@ -143,14 +144,14 @@ public class Robot extends TimedRobot {//2.0
 
     //Spike direction choosen at random, may need to be changed/not be neccasary
     //Written with following presumption:
-    //solenoidA forward = isolation valve for manipulater
-    //solenoidA reverse = isolation valve for climber
-    //solenoidB forward = manipulater release valve
-    //solenoidB reverse = extra channel (is currently disabled as solenoidB can only be run Forwards at the moment)
-    solenoidA = new Relay(solenoidANum);
-    solenoidB = new Relay(solenoidBNum, Relay.Direction.kForward);
+    //isolationRelay forward = isolation valve for manipulater
+    //isolationRelay reverse = isolation valve for climber
+    //bleedRelay forward = manipulater release valve
+    //bleedRelay reverse = extra channel (is currently disabled as bleedRelay can only be run Forwards at the moment)
+    isolationRelay = new Relay(isolationRelayNum);
+    bleedRelay = new Relay(bleedRelayNum, Relay.Direction.kForward);
 
-    leftSide = new Encoder(2,3);
+    leftSide = new Encoder(0,1);
     vacuumSensor = new AnalogInput(vacuumSensorNum);
   }
 
@@ -229,7 +230,7 @@ public class Robot extends TimedRobot {//2.0
       inProgresses[progHatchPickupP] = true;
     }
     if(inProgresses[progHatchPickupP]) {
-      solenoidA.set(Relay.Value.kForward);//open valve to manipulator
+      isolationRelay.set(Relay.Value.kForward);//open valve to manipulator
       if(vacuumSensor.getValue() < vacuumHatchThreshold) {
         //rumblecode
         inProgresses[progHatchPickupP] = false;
@@ -264,11 +265,11 @@ public class Robot extends TimedRobot {//2.0
         }
       }
     }
-    if(progHatchPickupF2) {//I moved this out so that we wouldn't have the two elevator.set statements interfering with eachother - NEW
+    if(progHatchPickupF2) {
       elevator.set(ControlMode.Position, elevatorLowPosition);
 
       if(Math.abs(elevator.getSelectedSensorPosition()) < elevatorTolerance) {
-        solenoidA.set(Relay.Value.kForward);
+        isolationRelay.set(Relay.Value.kForward);
 
         if(vacuumSensor.getValue() < vacuumHatchThreshold) {
         //rumble code
@@ -292,13 +293,12 @@ public class Robot extends TimedRobot {//2.0
       inProgresses[progHatchPlaceL] = true;
     }
     if(inProgresses[progHatchPlaceL]) {
-      rail.set(ControlMode.PercentOutput,0.35);
+      targetRailPosition = railOut;
 
-      if(rail.getSelectedSensorPosition() > railOut)
+      if(Math.abs(rail.getSelectedSensorPosition() - railOut) < railTolerance)
       {
-        rail.set(ControlMode.PercentOutput, 0);
-        solenoidA.set(Relay.Value.kOff);
-        solenoidB.set(Relay.Value.kOn);
+        isolationRelay.set(Relay.Value.kOff);
+        bleedRelay.set(Relay.Value.kOn);
 
         if(vacuumSensor.getValue() > vacuumHatchThreshold) {//We might want this to be vacuum threshold but I'm not sure yet (also at tag RAS)-Scott
           inProgresses[progHatchPlaceL] = false;
@@ -323,19 +323,16 @@ public class Robot extends TimedRobot {//2.0
         elevator.set(ControlMode.Position, elevatorHighPosition);
 
       if(!elevatorEnable || Math.abs(elevator.getSelectedSensorPosition()-elevatorHighPosition) < elevatorTolerance) {
+        targetRailPosition = railOut;
 
         if(Math.abs(rail.getSelectedSensorPosition() - railOut) < elevatorTolerance) {
-          solenoidB.set(Relay.Value.kOn);
-          solenoidA.set(Relay.Value.kOff);
+          bleedRelay.set(Relay.Value.kOn);
+          isolationRelay.set(Relay.Value.kOff);
 
           if(vacuumSensor.getValue() > vacuumHatchThreshold) {
             inProgresses[progHatchPlaceH] = false;
             progCancel = true;
           }
-        } else if(rail.getSelectedSensorPosition() < railOut) {
-          rail.set(ControlMode.PercentOutput, .35);
-        } else {
-          rail.set(ControlMode.PercentOutput, -.35);
         }
       }
     }
@@ -393,7 +390,8 @@ public class Robot extends TimedRobot {//2.0
       letUpCargoPlaceRL = true;
     }
     if(inProgresses[progCargoPlaceRL]) {
-      if(Math.abs(rail.getSelectedSensorPosition() - railOut) < elevatorTolerance) {
+      targetRailPosition = railOut;
+      if(Math.abs(rail.getSelectedSensorPosition() - railOut) < railTolerance) {
         wrist.set(ControlMode.Position,wristMiddlePosition);
         if(Math.abs(wrist.getSelectedSensorPosition() - wristMiddlePosition) < wristTolerance) {
 
@@ -402,12 +400,7 @@ public class Robot extends TimedRobot {//2.0
             progCancel = true;
           }
         }
-      } else if(rail.getSelectedSensorPosition() < railOut) {
-        rail.set(ControlMode.PercentOutput, .35);
-      } else {
-        rail.set(ControlMode.PercentOutput, -.35);
       }
-
     }
         //proper elevator height
         //flop wrist
@@ -424,15 +417,12 @@ public class Robot extends TimedRobot {//2.0
     if(inProgresses[progCargoPlaceRH]) {
       elevator.set(ControlMode.Position, elevatorHighPosition);
       if(Math.abs(elevator.getSelectedSensorPosition() - elevatorHighPosition) < elevatorTolerance) {
+        targetRailPosition = railOut;
         if(Math.abs(rail.getSelectedSensorPosition() - railOut) < elevatorTolerance) {
           if(j.getRawButton(cargoPlaceRH) && letUpCargoPlaceRH) {
            inProgresses[progCargoPlaceRH] = false;
            progCancel = true;
           }
-        } else if(rail.getSelectedSensorPosition() < railOut) {
-          rail.set(ControlMode.PercentOutput, .35);
-        } else {
-          rail.set(ControlMode.PercentOutput, -.35);
         }
       }
     }
@@ -472,8 +462,8 @@ public class Robot extends TimedRobot {//2.0
       if(inProgresses[progClimbMotor]){
         
         climberArm.set(j.getRawAxis(5));
-        solenoidA.setDirection(Relay.Direction.kReverse);
-        solenoidB.set(Relay.Value.kOn);
+        isolationRelay.setDirection(Relay.Direction.kReverse);
+        bleedRelay.set(Relay.Value.kOn);
         if(vacuumSensor.getValue() < vacuumThreshold) {
           //controller rumble
           if(j.getRawButton(climbMotor) && letUpClimb) {// press button again to activate winch
@@ -500,8 +490,6 @@ public class Robot extends TimedRobot {//2.0
 
       //SRF_PID get the kP out of that
 
-      //Exterior Rail control - XXX
-
       if(progCancel) { //add timeout here - XXX
         inProgresses[progHatchPickupP] = false;
         inProgresses[progHatchPickupF] = false;
@@ -517,12 +505,12 @@ public class Robot extends TimedRobot {//2.0
         inProgresses[progElevatorL] = false;
         inProgresses[progHatchPlaceL] = false;
 
-        solenoidA.setDirection(Relay.Direction.kForward);
-        solenoidB.set(Relay.Value.kOff);
+        isolationRelay.setDirection(Relay.Direction.kForward);
+        bleedRelay.set(Relay.Value.kOff);
         //set the set points back to standard running mode(finishlogic making them return to default in order(wrist, rail, elevator))
         wrist.set(ControlMode.Position, wristHighPosition);
         if(Math.abs(wrist.getSelectedSensorPosition() - wristHighPosition) < wristTolerance) {
-          rail.set(ControlMode.PercentOutput, 0);
+          targetRailPosition = railIn;
             
           if(Math.abs(rail.getSelectedSensorPosition() - railIn) < railTolerance) {
             elevator.set(ControlMode.Position, elevatorLowPosition);
@@ -530,10 +518,6 @@ public class Robot extends TimedRobot {//2.0
             if(Math.abs(elevator.getSelectedSensorPosition() - elevatorLowPosition) < elevatorTolerance) {
               progCancel = false;
             }
-          }else if(rail.getSelectedSensorPosition() > railIn ) {
-            rail.set(ControlMode.PercentOutput, -.35);
-          } else {
-            rail.set(ControlMode.PercentOutput, .35);
           }
         }
       }
@@ -541,6 +525,14 @@ public class Robot extends TimedRobot {//2.0
       //vacuum - presuming max speed?
       if(vacuumSensor.getValue() > vacuumThreshold) {
         vacuumPump.set(1.0);
+      }
+
+      if(Math.abs(rail.getSelectedSensorPosition() - targetRailPosition) < elevatorTolerance) {
+        rail.set(ControlMode.PercentOutput, 0);
+      } else if(rail.getSelectedSensorPosition() < targetRailPosition) {
+        rail.set(ControlMode.PercentOutput, .35);
+      } else if(rail.getSelectedSensorPosition() > targetRailPosition){
+        rail.set(ControlMode.PercentOutput, -.35);
       }
 
   }
