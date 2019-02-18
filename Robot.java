@@ -24,7 +24,7 @@ import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {
+public class Robot extends TimedRobot {//2.0
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -61,7 +61,7 @@ public class Robot extends TimedRobot {
   //Do we want encoder for each side???
   AnalogInput vacuumSensor;
   Encoder leftSide;
-  Encoder rightSide;
+  //Encoder rightSide;
 
   //buttons and progs
   int rollerIn = 4, rollerOut = 5, hatchPickupP = 2, hatchPickupF, hatchPlaceH, hatchPlaceL; //leftTrigger, rightTrigger, B
@@ -88,7 +88,7 @@ public class Robot extends TimedRobot {
   NetworkTable table;
 
   //place holders
-  int elevatorNum, rollerNum, wristNum, railNum, vacuumPumpNum, vacuumSensorNum, solenoidANum, solenoidBNum, climberArmNum, climberWinchNum, elevatorHighNum, elevatorLowNum, vacuumThreshold = 280/*(?)*/, vacuumHatchThreshold = 589, railIn, railOut;
+  int elevatorNum = 0, rollerNum = 7, wristNum = 2, railNum = 1, vacuumPumpNum = 4, vacuumSensorNum = 0, solenoidANum = 0, solenoidBNum = 1, climberArmNum = 6, climberWinchNum = 5, elevatorHighNum = 0, elevatorLowNum = 1, vacuumThreshold = 280/*(?)*/, vacuumHatchThreshold = 589, railIn, railOut;
   double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHighPosition/*hatch cargoship/low rocket, cargo low*/;
   double wristTolerance, elevatorTolerance, railTolerance;
 
@@ -150,7 +150,7 @@ public class Robot extends TimedRobot {
     solenoidA = new Relay(solenoidANum);
     solenoidB = new Relay(solenoidBNum, Relay.Direction.kForward);
 
-    leftSide = new Encoder(0,1);
+    leftSide = new Encoder(2,3);
     vacuumSensor = new AnalogInput(vacuumSensorNum);
   }
 
