@@ -24,7 +24,7 @@ import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.2
+public class Robot extends TimedRobot {//v1.3
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -73,6 +73,7 @@ public class Robot extends TimedRobot {//v1.2
   int progClimbWinch = 8, progElevatorH = 9, progElevatorL = 10, progHatchPlaceL = 11;
   int progCargoPickupP = 12;
   boolean progHatchPickupF2, progCancel = false;
+  boolean stopDrive = false;
 
   boolean[] inProgresses = new boolean[] {false, false, false, false, false, false, false, false, false, false, false, false, false};
   
@@ -212,7 +213,8 @@ public class Robot extends TimedRobot {//v1.2
   public void SRF_Control() {
     
     //drive code
-    robot.arcadeDrive(-j.getRawAxis(1),j.getRawAxis(0));
+    if(!stopDrive)
+      robot.arcadeDrive(-j.getRawAxis(1),j.getRawAxis(0));
 
     //roller code - may need to be reversed
     if(j.getRawAxis(rollerIn) > 0.3) {
