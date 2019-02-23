@@ -28,7 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5
+public class Robot extends TimedRobot {//v1.5.1
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -86,8 +86,14 @@ public class Robot extends TimedRobot {//v1.5
   int progressCount;
 
   //PID
+  int elevatorTuner = 0;
+  int wristTuner = 1;
+
+  SRF_PID[] pids = new SRF_PID[] {new SRF_PID(j,0,0,0), new SRF_PID(j,0,0,0)};
+
   double elevatorP, elevatorI, elevatorD, wristP, wristI, wristD;
 
+  int pidCount = 0;
   //misc
   double elevatorInput, wristInput;
   NetworkTable table;
@@ -99,6 +105,8 @@ public class Robot extends TimedRobot {//v1.5
 
   Timer rumbleTimer = new Timer();
   Timer timeoutTimer = new Timer();
+  double startTime;
+  boolean progCancelfirstTime = true;
   
   //enable flags
   private static final boolean elevatorEnable = false;//a boolean that enables and disables the elevator motion (to handle pre-elevator movement)
@@ -214,6 +222,8 @@ public class Robot extends TimedRobot {//v1.5
     SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
     SmartDashboard.putBoolean("progCancel", progCancel);
     SmartDashboard.putNumber("Wrist Encoder", wrist.getSelectedSensorPosition());
+    SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
+    SmartDashboard.putNumber("Rail Enocder", rail.getSelectedSensorPosition());
     if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
   }
 
@@ -243,13 +253,13 @@ public class Robot extends TimedRobot {//v1.5
     {
       //if(testSystem==0)
         //climberArm.set(testAxis);
-      //else if(testSystem==1)
+      //else if(testSystem==1 && wristEnable)
         //wrist.set(ControlMode.PercentOutput, testAxis);
       /*else*//* if(testSystem==2)
         roller.set(testAxis);
       else if(testSystem==3 && elevatorEnable)
         elevator.set(ControlMode.PercentOutput,testAxis);
-      else if(testSystem==4)
+      else if(testSystem==4 && railEnable)
         rail.set(ControlMode.PercentOutput,testAxis);
       else if(testSystem==5)
         vacuumPump.set(testAxis);
@@ -287,7 +297,7 @@ public class Robot extends TimedRobot {//v1.5
     else
       vacuumPump.set(0);
 
-    if(Math.abs(j.getRawAxis(5)) > 0.2)
+    if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
       wrist.set(ControlMode.PercentOutput, 0.5*j.getRawAxis(5));
     else
       wrist.set(ControlMode.PercentOutput, 0);
@@ -369,7 +379,7 @@ public class Robot extends TimedRobot {//v1.5
 
     //BRB //#2
     //Pickup Hatch (Floor) - I made a lovely tree :)))))))))))
-/*    if(j.getRawButton(hatchPickupF) && !inProgresses[progHatchPickupF] && elevatorEnable && letUpHatchPickupF) {
+/*    if(j.getRawButton(hatchPickupF) && !inProgresses[progHatchPickupF] && elevatorEnable && wristEnable && letUpHatchPickupF) {
       inProgresses[progHatchPickupF] = true;
       letUpHatchPickupF = false;
     } else if (!j.getRawButton(hatchPickupF)) {
@@ -429,7 +439,7 @@ public class Robot extends TimedRobot {//v1.5
 
         //BRB
         //Place Hatch (low)/* #3
-   /* if(j.getRawButton(hatchPlaceL) && !inProgresses[progHatchPlaceL]) {
+   /* if(j.getRawButton(hatchPlaceL) && !inProgresses[progHatchPlaceL] && railEnable) {
       inProgresses[progHatchPlaceL] = true;
     }
     if(inProgresses[progHatchPlaceL]) {
@@ -455,7 +465,7 @@ public class Robot extends TimedRobot {//v1.5
 
     //BRB
     //place hatch (high) #4
-  /*  if(elevatorEnable && j.getRawButton(hatchPlaceH) && !inProgresses[progHatchPlaceH]) { //RAS
+  /*  if(elevatorEnable && j.getRawButton(hatchPlaceH) && !inProgresses[progHatchPlaceH] && elevatorEnable && railEnable) { //RAS
       inProgresses[progHatchPlaceH] = true;
     }
     if(inProgresses[progHatchPlaceH]) {
@@ -483,7 +493,7 @@ public class Robot extends TimedRobot {//v1.5
     
     //BRB
     //Pickup Cargo (Floor) #5
-    /*if(j.getRawButton(cargoPickupF) && !inProgresses[progCargoPickupF] && elevatorEnable) {
+    /*if(j.getRawButton(cargoPickupF) && !inProgresses[progCargoPickupF] && elevatorEnable && wristEnable) {
       inProgresses[progCargoPickupF] = true;
       letUpCargoPickupF = false;
     } else if(!j.getRawButton(cargoPickupF)) {
@@ -507,7 +517,7 @@ public class Robot extends TimedRobot {//v1.5
 
     //XXX - currently left out in favor of cargoship placement
     //Pickup cargo (Player station) #6
-    /*if(j.getRawButton(cargoPickupP) && !inProgresses[progCargoPickupP] && elevatorEnable) {
+    /*if(j.getRawButton(cargoPickupP) && !inProgresses[progCargoPickupP] && elevatorEnable && wristEnable) {
       inProgresses[progCargoPickupP] = true;
       letUpCargoPickupP = false;
     } else if(!j.getRawButton(cargoPickupP)) {
@@ -525,7 +535,7 @@ public class Robot extends TimedRobot {//v1.5
     }*/
     //BRB - rail
     //Place Cargo (Rocket Low) #7
-    /*if(j.getRawButton(cargoPlaceRL) && !inProgresses[progCargoPlaceRL] && letUpCargoPlaceRL) {
+    /*if(j.getRawButton(cargoPlaceRL) && !inProgresses[progCargoPlaceRL] && letUpCargoPlaceRL && railEnable && wristEnable) {
       inProgresses[progCargoPlaceRL] = true;
       letUpCargoPlaceRL = false;
     } else if(!j.getRawButton(cargoPlaceRL)) {
@@ -549,7 +559,7 @@ public class Robot extends TimedRobot {//v1.5
 
     //BRB
     //Place Cargo (Rocket High) #8
-    /*if(j.getRawButton(cargoPlaceRH) && !inProgresses[progCargoPlaceRH] && letUpCargoPlaceRH) {
+    /*if(j.getRawButton(cargoPlaceRH) && !inProgresses[progCargoPlaceRH] && letUpCargoPlaceRH && elevatorEnable && railEnable) {
       inProgresses[progCargoPlaceRH] = true;
       letUpCargoPlaceRH = false;
     } else if(!j.getRawButton(cargoPlaceRH)) {
@@ -571,7 +581,7 @@ public class Robot extends TimedRobot {//v1.5
 
     //BRB
     //Place Cargo (Cargo Ship) #9
-    /*if(j.getRawButton(cargoPlaceC) && !inProgresses[progCargoPlaceC] && letUpCargoPlaceC) {
+    /*if(j.getRawButton(cargoPlaceC) && !inProgresses[progCargoPlaceC] && letUpCargoPlaceC && elevatorEnable && wristEnable) {
       inProgresses[progCargoPlaceC] = true;
       letUpCargoPlaceC = false;
     } else if(!j.getRawButton(cargoPlaceC)) {
@@ -638,6 +648,19 @@ public class Robot extends TimedRobot {//v1.5
 
 
       if(progCancel) { //add timeout here - XXX
+        if(progCancelfirstTime) {
+          progCancelfirstTime = false;
+          timeoutTimer.start();
+          startTime = timeoutTimer.get();
+        }
+        if(timeoutTimer.get() - startTime > 20) {
+          progCancel = false;
+          progCancelfirstTime = true;
+          timeoutTimer.stop();
+          timeoutTimer.reset();
+          SmartDashboard.putString("WARNING ERROR","TIMEOUT IN ProgCancel");
+        }
+          
         inProgresses[progHatchPickupP] = false;
         inProgresses[progHatchPickupF] = false;
         inProgresses[progHatchPlaceH] = false;
@@ -678,6 +701,9 @@ public class Robot extends TimedRobot {//v1.5
             
             if(Math.abs(elevator.getSelectedSensorPosition() - elevatorLowPosition) < elevatorTolerance) 
               progCancel = false;
+              progCancelfirstTime = true;
+              timeoutTimer.stop();
+              timeoutTimer.reset();
           }
           else{
             progCancel = false;
@@ -711,6 +737,20 @@ public class Robot extends TimedRobot {//v1.5
         rail.set(ControlMode.PercentOutput, -.35);
       }*/
 
+      if(pidCount <= 1 /*&& j.getRawButton(whatever button)*/) {
+        pidCount++;        
+      } else {
+        pidCount = 0;
+      }
+
+      SmartDashboard.putNumber("kP", pids[pidCount].k[0]);
+      SmartDashboard.putNumber("kI", pids[pidCount].k[1]);
+      SmartDashboard.putNumber("kD", pids[pidCount].k[2]);
+      SmartDashboard.putNumber("P Multiplier", pids[pidCount].mult[0]);
+      SmartDashboard.putNumber("I Multiplier", pids[pidCount].mult[1]);
+      SmartDashboard.putNumber("D Multiplier", pids[pidCount].mult[2]);
+      SmartDashboard.putNumber("CurrentMode", pids[pidCount].currentMode);
+      SmartDashboard.putNumber("CurrentGain", pids[pidCount].currentGain);
   }
 
   @Override
