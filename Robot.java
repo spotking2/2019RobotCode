@@ -28,7 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.1
+public class Robot extends TimedRobot {//v1.5.2
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -57,6 +57,7 @@ public class Robot extends TimedRobot {//v1.5.1
 
   DifferentialDrive robot;
   Joystick j;
+  Joystick joyTune;
 
   //Sensors
   DigitalInput elevatorHigh;
@@ -86,14 +87,18 @@ public class Robot extends TimedRobot {//v1.5.1
   int progressCount;
 
   //PID
-  int elevatorTuner = 0;
-  int wristTuner = 1;
+  int elevatorTuner = 0, wristTuner = 1;
+  int elevatorCycleCount = 0, wristCycleCount = 0;
+  boolean letUpChangePID = true, letUpCompute = true, progCompute = false, letUpWristCycle = true, letUpElevatorCycle = true;
 
   SRF_PID[] pids = new SRF_PID[] {new SRF_PID(j,0,0,0), new SRF_PID(j,0,0,0)};
 
   double elevatorP, elevatorI, elevatorD, wristP, wristI, wristD;
 
   int pidCount = 0;
+  double targetPositionElevator = 0;
+  double targetPositionWrist = 0;
+
   //misc
   double elevatorInput, wristInput;
   NetworkTable table;
@@ -114,6 +119,7 @@ public class Robot extends TimedRobot {//v1.5.1
   private static final boolean railEnable = false;
   
   private static final boolean testMode = true;
+  private static final boolean tuneMode = true;
   private int testSystem = 0;
   boolean letUpSystem = true;
   double testAxis;
@@ -131,6 +137,8 @@ public class Robot extends TimedRobot {//v1.5.1
     elevatorLow = new DigitalInput(elevatorLowNum);
 
     j = new Joystick(0);
+    if(tuneMode)
+      joyTune = new Joystick(1);
 
     //driveBase
     frontLeft = new Talon(0);
@@ -219,11 +227,22 @@ public class Robot extends TimedRobot {//v1.5.1
     else
       SRF_Control();
 
+    SmartDashboard.putBoolean("Computing?", progCompute);
+    SmartDashboard.putNumber("Elevator Cycle Number",elevatorCycleCount);
+    SmartDashboard.putNumber("Wrist Cycle Number",wristCycleCount);  
     SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
     SmartDashboard.putBoolean("progCancel", progCancel);
     SmartDashboard.putNumber("Wrist Encoder", wrist.getSelectedSensorPosition());
     SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
     SmartDashboard.putNumber("Rail Enocder", rail.getSelectedSensorPosition());
+    SmartDashboard.putNumber("kP", pids[pidCount].k[0]);
+    SmartDashboard.putNumber("kI", pids[pidCount].k[1]);
+    SmartDashboard.putNumber("kD", pids[pidCount].k[2]);
+    SmartDashboard.putNumber("P Multiplier", pids[pidCount].mult[0]);
+    SmartDashboard.putNumber("I Multiplier", pids[pidCount].mult[1]);
+    SmartDashboard.putNumber("D Multiplier", pids[pidCount].mult[2]);
+    SmartDashboard.putNumber("CurrentMode", pids[pidCount].currentMode);
+    SmartDashboard.putNumber("CurrentGain", pids[pidCount].currentGain);
     if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
   }
 
@@ -307,6 +326,72 @@ public class Robot extends TimedRobot {//v1.5.1
   else
     bleedRelay.set(Value.kOff);
 */
+    if(j.getRawButton(3) && letUpCompute) {
+
+      letUpCompute = false;
+    } else if (!j.getRawButton(3)) {
+      letUpCompute = true;
+    }
+
+    if(j.getRawButton(7) && letUpElevatorCycle) {
+      letUpElevatorCycle = false ;
+        if(elevatorCycleCount == 3)
+          elevatorCycleCount = -1;
+        elevatorCycleCount++;
+        if(elevatorCycleCount == 0)
+          targetPositionElevator = elevatorHighPosition;
+        else if(elevatorCycleCount == 1)
+          targetPositionElevator = elevatorMiddlePosition;
+        else if(elevatorCycleCount == 2)
+          targetPositionElevator = elevatorSemiLowPosition;
+        else if(elevatorCycleCount == 3)
+          targetPositionElevator = elevatorLowPosition;
+    } else if(!j.getRawButton(7)) {
+      letUpElevatorCycle = true; ;
+    }
+
+    if(j.getRawButton(8) && letUpWristCycle) {
+      letUpWristCycle = false;
+      if(wristCycleCount == 3)
+        wristCycleCount = -1;
+      wristCycleCount++;
+      if(wristCycleCount == 0)
+          targetPositionWrist = wristHighPosition;
+        else if(wristCycleCount == 1)
+          targetPositionWrist = wristMiddlePosition;
+        else if(wristCycleCount == 2)
+          targetPositionWrist = wristLowPosition;
+        else if(wristCycleCount == 3)
+          targetPositionWrist = wristUltraLowPosition;
+    } else if(!j.getRawButton(8)) {
+      letUpWristCycle = true ;
+    }
+
+    if(progCompute) {
+      if(pidCount == 0) {
+        elevator.config_kP(0, pids[0].k[0]);
+        elevator.config_kI(0, pids[0].k[1]);
+        elevator.config_kD(0, pids[0].k[2]);
+        elevator.set(ControlMode.Position, targetPositionElevator);
+      } else {
+        wrist.config_kP(0, pids[1].k[0]);
+        wrist.config_kI(0, pids[1].k[1]);
+        wrist.config_kD(0, pids[1].k[2]);
+        wrist.set(ControlMode.Position, targetPositionWrist);
+      }
+    }
+
+    if(j.getRawButton(1) && letUpChangePID) {
+      if(pidCount == 1)
+        pidCount = -1;
+      pidCount++;
+      letUpChangePID = false;        
+    } else if(!j.getRawButton(1)) {
+      letUpChangePID = true;
+    }
+
+    if(tuneMode)
+      pids[pidCount].controlPID();    
     SmartDashboard.putNumber("testSystem",testSystem);
   }
 
@@ -737,20 +822,9 @@ public class Robot extends TimedRobot {//v1.5.1
         rail.set(ControlMode.PercentOutput, -.35);
       }*/
 
-      if(pidCount <= 1 /*&& j.getRawButton(whatever button)*/) {
-        pidCount++;        
-      } else {
-        pidCount = 0;
-      }
+      
 
-      SmartDashboard.putNumber("kP", pids[pidCount].k[0]);
-      SmartDashboard.putNumber("kI", pids[pidCount].k[1]);
-      SmartDashboard.putNumber("kD", pids[pidCount].k[2]);
-      SmartDashboard.putNumber("P Multiplier", pids[pidCount].mult[0]);
-      SmartDashboard.putNumber("I Multiplier", pids[pidCount].mult[1]);
-      SmartDashboard.putNumber("D Multiplier", pids[pidCount].mult[2]);
-      SmartDashboard.putNumber("CurrentMode", pids[pidCount].currentMode);
-      SmartDashboard.putNumber("CurrentGain", pids[pidCount].currentGain);
+
   }
 
   @Override
