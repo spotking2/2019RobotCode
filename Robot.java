@@ -28,7 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.2
+public class Robot extends TimedRobot {//v1.5.3
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -57,7 +57,7 @@ public class Robot extends TimedRobot {//v1.5.2
 
   DifferentialDrive robot;
   Joystick j;
-  Joystick joyTune;
+  Joystick joyTune = new Joystick(1);
 
   //Sensors
   DigitalInput elevatorHigh;
@@ -91,11 +91,10 @@ public class Robot extends TimedRobot {//v1.5.2
   int elevatorCycleCount = 0, wristCycleCount = 0;
   boolean letUpChangePID = true, letUpCompute = true, progCompute = false, letUpWristCycle = true, letUpElevatorCycle = true;
 
-  SRF_PID[] pids = new SRF_PID[] {new SRF_PID(j,0,0,0), new SRF_PID(j,0,0,0)};
+  double elevatorP, elevatorI, elevatorD, wristP = .02, wristI = 0.000000001, wristD = 0;
+  SRF_PID[] pids = new SRF_PID[] {new SRF_PID(joyTune,elevatorP,elevatorI,elevatorD), new SRF_PID(joyTune,wristP,wristI,wristD)};
 
-  double elevatorP, elevatorI, elevatorD, wristP, wristI, wristD;
-
-  int pidCount = 0;
+  int pidCount = 1;
   double targetPositionElevator = 0;
   double targetPositionWrist = 0;
 
@@ -105,7 +104,7 @@ public class Robot extends TimedRobot {//v1.5.2
 
   //place holders
   int elevatorNum = 0, rollerNum = 7, wristNum = 2, railNum = 1, vacuumPumpNum = 4, vacuumSensorNum = 0, isolationRelayNum = 0, bleedRelayNum = 1, climberArmNum = 6, climberWinchNum = 5, elevatorHighNum = 0, elevatorLowNum = 1, vacuumThreshold = 700/*(?)*/, vacuumHatchThreshold = 800, vacuumReleaseThreshold = 2500, railIn, railOut;
-  double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition/* cargo low rocket place*/, wristHighPosition/*hatch cargoship/low rocket, cargo low*/;
+  double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition = 56000/* cargo low rocket place*/, wristHighPosition = 0 /*hatch cargoship/low rocket, cargo low*/;
   double wristTolerance, elevatorTolerance, railTolerance;
 
   Timer rumbleTimer = new Timer();
@@ -115,11 +114,12 @@ public class Robot extends TimedRobot {//v1.5.2
   
   //enable flags
   private static final boolean elevatorEnable = false;//a boolean that enables and disables the elevator motion (to handle pre-elevator movement)
-  private static final boolean wristEnable = false;
+  private static final boolean wristEnable = true;
   private static final boolean railEnable = false;
   
   private static final boolean testMode = true;
   private static final boolean tuneMode = true;
+  private static final boolean homeMode = true;
   private int testSystem = 0;
   boolean letUpSystem = true;
   double testAxis;
@@ -162,12 +162,14 @@ public class Robot extends TimedRobot {//v1.5.2
     wrist.config_kP(0, wristP);
     wrist.config_kI(0, wristI);
     wrist.config_kD(0, wristD);
+    wrist.setSelectedSensorPosition(0);
 
     elevator = new TalonSRX(elevatorNum);
     elevator.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, 0, 0);
     elevator.config_kP(0, elevatorP);
     elevator.config_kI(0, elevatorI);
     elevator.config_kD(0, elevatorD);
+    elevator.setSelectedSensorPosition(0);
     elevator.set(ControlMode.Position, elevatorLowPosition);
 
     climberArm = new VictorSP(climberArmNum);
@@ -216,7 +218,11 @@ public class Robot extends TimedRobot {//v1.5.2
 
   @Override
   public void teleopInit() {
-    j.setRumble(RumbleType.kLeftRumble, 0);
+    if(homeMode){
+      wrist.setSelectedSensorPosition(0);
+      elevator.setSelectedSensorPosition(0);
+    }
+     j.setRumble(RumbleType.kLeftRumble, 0);
     progressCount = 0;
   }
 
@@ -233,17 +239,18 @@ public class Robot extends TimedRobot {//v1.5.2
     SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
     SmartDashboard.putBoolean("progCancel", progCancel);
     SmartDashboard.putNumber("Wrist Encoder", wrist.getSelectedSensorPosition());
-    SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
-    SmartDashboard.putNumber("Rail Enocder", rail.getSelectedSensorPosition());
-    SmartDashboard.putNumber("kP", pids[pidCount].k[0]);
-    SmartDashboard.putNumber("kI", pids[pidCount].k[1]);
-    SmartDashboard.putNumber("kD", pids[pidCount].k[2]);
+    //SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
+    //SmartDashboard.putNumber("Rail Enocder", rail.getSelectedSensorPosition());
+    SmartDashboard.putNumber("kP", pids[pidCount].k[0]/*wristP*/);
+    SmartDashboard.putNumber("kI", pids[pidCount].k[1]/*wristI*/);
+    SmartDashboard.putNumber("kD", pids[pidCount].k[2]/*wristD*/);
     SmartDashboard.putNumber("P Multiplier", pids[pidCount].mult[0]);
     SmartDashboard.putNumber("I Multiplier", pids[pidCount].mult[1]);
     SmartDashboard.putNumber("D Multiplier", pids[pidCount].mult[2]);
     SmartDashboard.putNumber("CurrentMode", pids[pidCount].currentMode);
     SmartDashboard.putNumber("CurrentGain", pids[pidCount].currentGain);
     if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
+    SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
   }
 
   void SRF_Test(){
@@ -316,21 +323,37 @@ public class Robot extends TimedRobot {//v1.5.2
     else
       vacuumPump.set(0);
 
-    if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
+   /* if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
       wrist.set(ControlMode.PercentOutput, 0.5*j.getRawAxis(5));
     else
       wrist.set(ControlMode.PercentOutput, 0);
-
+*/
 /*  if(relayOn)
     bleedRelay.set(Value.kForward);
   else
     bleedRelay.set(Value.kOff);
 */
     if(j.getRawButton(3) && letUpCompute) {
-
+      progCompute = true;
       letUpCompute = false;
     } else if (!j.getRawButton(3)) {
       letUpCompute = true;
+      progCompute = false;
+      wrist.set(ControlMode.PercentOutput, 0);
+    }
+
+    if(progCompute) {
+      if(pidCount == 0) {
+        elevator.config_kP(0, pids[0].k[0]);
+        elevator.config_kI(0, pids[0].k[1]);
+        elevator.config_kD(0, pids[0].k[2]);
+        elevator.set(ControlMode.Position, targetPositionElevator);
+      } else {
+        wrist.config_kP(0, pids[1].k[0]);
+        wrist.config_kI(0, pids[1].k[1]);
+        wrist.config_kD(0, pids[1].k[2]);
+        wrist.set(ControlMode.Position, targetPositionWrist);
+      }
     }
 
     if(j.getRawButton(7) && letUpElevatorCycle) {
@@ -365,21 +388,7 @@ public class Robot extends TimedRobot {//v1.5.2
           targetPositionWrist = wristUltraLowPosition;
     } else if(!j.getRawButton(8)) {
       letUpWristCycle = true ;
-    }
-
-    if(progCompute) {
-      if(pidCount == 0) {
-        elevator.config_kP(0, pids[0].k[0]);
-        elevator.config_kI(0, pids[0].k[1]);
-        elevator.config_kD(0, pids[0].k[2]);
-        elevator.set(ControlMode.Position, targetPositionElevator);
-      } else {
-        wrist.config_kP(0, pids[1].k[0]);
-        wrist.config_kI(0, pids[1].k[1]);
-        wrist.config_kD(0, pids[1].k[2]);
-        wrist.set(ControlMode.Position, targetPositionWrist);
-      }
-    }
+    }  
 
     if(j.getRawButton(1) && letUpChangePID) {
       if(pidCount == 1)
@@ -821,9 +830,6 @@ public class Robot extends TimedRobot {//v1.5.2
       } else if(rail.getSelectedSensorPosition() > targetRailPosition){
         rail.set(ControlMode.PercentOutput, -.35);
       }*/
-
-      
-
 
   }
 
