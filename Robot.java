@@ -28,7 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.3
+public class Robot extends TimedRobot {//v1.5.4
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -91,7 +91,7 @@ public class Robot extends TimedRobot {//v1.5.3
   int elevatorCycleCount = 0, wristCycleCount = 0;
   boolean letUpChangePID = true, letUpCompute = true, progCompute = false, letUpWristCycle = true, letUpElevatorCycle = true;
 
-  double elevatorP, elevatorI, elevatorD, wristP = .02, wristI = 0.000000001, wristD = 0;
+  double elevatorP, elevatorI, elevatorD, wristP = .02, wristI = 0.00001, wristD = 0;
   SRF_PID[] pids = new SRF_PID[] {new SRF_PID(joyTune,elevatorP,elevatorI,elevatorD), new SRF_PID(joyTune,wristP,wristI,wristD)};
 
   int pidCount = 1;
@@ -242,7 +242,7 @@ public class Robot extends TimedRobot {//v1.5.3
     //SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
     //SmartDashboard.putNumber("Rail Enocder", rail.getSelectedSensorPosition());
     SmartDashboard.putNumber("kP", pids[pidCount].k[0]/*wristP*/);
-    SmartDashboard.putNumber("kI", pids[pidCount].k[1]/*wristI*/);
+    SmartDashboard.putNumber("kI", pids[pidCount].k[1]*1000/*wristI*/);
     SmartDashboard.putNumber("kD", pids[pidCount].k[2]/*wristD*/);
     SmartDashboard.putNumber("P Multiplier", pids[pidCount].mult[0]);
     SmartDashboard.putNumber("I Multiplier", pids[pidCount].mult[1]);
