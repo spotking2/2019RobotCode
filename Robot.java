@@ -11,6 +11,7 @@ import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.wpilibj.DigitalOutput;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.Relay;
@@ -28,7 +29,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.6
+public class Robot extends TimedRobot {//v1.5.7
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -102,11 +103,13 @@ public class Robot extends TimedRobot {//v1.5.6
   //misc
   double elevatorInput, wristInput;
   NetworkTable table;
+  DigitalOutput testytest = new DigitalOutput(5);
+  boolean boolTest = false;
 
   //place holders
-  int elevatorNum = 0, rollerNum = 7, wristNum = 2, railNum = 1, vacuumPumpNum = 4, vacuumSensorNum = 0, isolationRelayNum = 0, bleedRelayNum = 1, climberArmNum = 6, climberWinchNum = 5, elevatorHighNum = 0, elevatorLowNum = 1, vacuumThreshold = 700/*(?)*/, vacuumHatchThreshold = 800, vacuumReleaseThreshold = 2500, railIn, railOut;
-  double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition/*hatch pickup floor*/, wristMiddlePosition = 56000/* cargo low rocket place*/, wristHighPosition = 0 /*hatch cargoship/low rocket, cargo low*/;
-  double wristTolerance, elevatorTolerance, railTolerance;
+  int elevatorNum = 1, rollerNum = 7, wristNum = 2, railNum = 0, vacuumPumpNum = 4, vacuumSensorNum = 0, isolationRelayNum = 0, bleedRelayNum = 1, climberArmNum = 6, climberWinchNum = 5, elevatorHighNum = 0, elevatorLowNum = 1, vacuumThreshold = 700/*(?)*/, vacuumHatchThreshold = 800, vacuumReleaseThreshold = 2500, railIn = 0, railOut = 214000;
+  double elevatorHighPosition/*cargo/hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition = 116000/*hatch pickup floor*/, wristMiddlePosition = 56000/* cargo low rocket place*/, wristHighPosition = 0 /*hatch cargoship/low rocket, cargo low*/;
+  double wristTolerance = 9001, elevatorTolerance, railTolerance;
 
   Timer rumbleTimer = new Timer();
   Timer timeoutTimer = new Timer();
@@ -117,23 +120,27 @@ public class Robot extends TimedRobot {//v1.5.6
   //enable flags
   private static final boolean elevatorEnable = false;//a boolean that enables and disables the elevator motion (to handle pre-elevator movement)
   private static final boolean wristEnable = true;
-  private static final boolean railEnable = false;
+  private static final boolean railEnable = true;
   
-  private static final boolean testMode = true;
+  private static final boolean testMode = false;
   private static final boolean tuneMode = true;
   private static final boolean homeMode = true;
+  private final boolean debug = false;
+  private final boolean wristEnablePID = false;
+
   private int testSystem = 0;
   boolean letUpSystem = true;
   double testAxis;
   int targetRailPosition = railIn;
   boolean relayOn = false;
   boolean continuedLetUp = false;
-  private final boolean debug = true;
+  
 
   double vacuumValue;
   int progIndex;
 
   boolean inTransition;
+  boolean letUpY;
 
   @Override
   public void robotInit() {
@@ -222,10 +229,12 @@ public class Robot extends TimedRobot {//v1.5.6
 
   @Override
   public void teleopInit() {
+    letUpY = true;
     inTransition = false;
     if(homeMode){
       wrist.setSelectedSensorPosition(0);
       elevator.setSelectedSensorPosition(0);
+      rail.setSelectedSensorPosition(0);
     }
      j.setRumble(RumbleType.kLeftRumble, 0);
     progressCount = 0;
@@ -257,6 +266,9 @@ public class Robot extends TimedRobot {//v1.5.6
     if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
     SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
     SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
+
+    testytest.pulse(10);
+
   }
 
   void SRF_Test(){
@@ -400,20 +412,27 @@ public class Robot extends TimedRobot {//v1.5.6
       letUpWristCycle = true ;
     }
     
-    //MAYBE FOR SRF_CONTROL
+    //MAYBE FOR SRF_CONTROL (well bits of it anyway)
     /////////////////////////////////////////////////////////
     
-    if(j.getRawButton(4)){
-      if(targetPositionWristTemp == wristMiddlePosition || Math.abs(wrist.getSelectedSensorPosition()-wristMiddlePosition) < 1000)
+    if(j.getRawButton(4) && letUpY){
+      letUpY = false;
+      if(targetPositionWristTemp == wristMiddlePosition || Math.abs(wrist.getSelectedSensorPosition()-wristMiddlePosition) < wristTolerance){
+        wrist.setIntegralAccumulator(0);
         targetPositionWrist = targetPositionWristTemp;
+      }
       else{
+        wrist.setIntegralAccumulator(0);
         targetPositionWrist = wristMiddlePosition;
         inTransition = true;
       }
     }
+    else if(!j.getRawButton(4))
+      letUpY = true;
 
-    if(inTransition && Math.abs(wrist.getSelectedSensorPosition()-wristMiddlePosition) < 500)
+    if(inTransition && Math.abs(wrist.getSelectedSensorPosition()-wristMiddlePosition) < wristTolerance)
     {
+      wrist.setIntegralAccumulator(0);
       inTransition = false;
       targetPositionWrist = targetPositionWristTemp;
     }
@@ -431,16 +450,19 @@ public class Robot extends TimedRobot {//v1.5.6
 
     
     if(railEnable && j.getRawButton(9) && rail.getSelectedSensorPosition() < railOut)
-      rail.set(ControlMode.PercentOutput, 0.35);
+      rail.set(ControlMode.PercentOutput, 0.25);
     else if(railEnable && j.getRawButton(10) && rail.getSelectedSensorPosition() > railIn)
-      rail.set(ControlMode.PercentOutput, -0.35);
+      rail.set(ControlMode.PercentOutput, -0.45);
     else
       rail.set(ControlMode.PercentOutput, 0);
 
 
     if(tuneMode)
       pids[pidCount].controlPID();    
+
+    SmartDashboard.putNumber("Temp Target Wrist", targetPositionWristTemp);
     SmartDashboard.putNumber("testSystem",testSystem);
+    SmartDashboard.putBoolean("inTransition", inTransition);
   }
 
 
@@ -463,12 +485,6 @@ public class Robot extends TimedRobot {//v1.5.6
     } else{
       roller.set(0);
     }
-
-    //XXX - temp code
-    if(Math.abs(j.getRawAxis(5)) > 0.2)
-      wrist.set(ControlMode.PercentOutput, 0.5*j.getRawAxis(5));
-    else
-      wrist.set(ControlMode.PercentOutput, 0);
 
     //manipulator code
 
@@ -572,7 +588,7 @@ public class Robot extends TimedRobot {//v1.5.6
 
         //BRB
         //Place Hatch (low)/* #3
-   /* if(j.getRawButton(hatchPlaceL) && !inProgresses[progHatchPlaceL] && railEnable) {
+    if(j.getRawButton(hatchPlaceL) && !inProgresses[progHatchPlaceL] && railEnable) {
       inProgresses[progHatchPlaceL] = true;
     }
     if(inProgresses[progHatchPlaceL]) {
@@ -588,7 +604,7 @@ public class Robot extends TimedRobot {//v1.5.6
           progCancel = true;
         }
       }
-    }*/
+    }
             //no cancel = good
             //???correct elevator position???
             //???if elevator position is correct??? then extend rail probably
@@ -813,9 +829,17 @@ public class Robot extends TimedRobot {//v1.5.6
         isolationRelay.set(Value.kForward);
         bleedRelay.set(Relay.Value.kOff);
         //set the set points back to standard running mode(finishlogic making them return to default in order(wrist, rail, elevator))
-        if(wristEnable)
-          wrist.set(ControlMode.Position, wristHighPosition);
-        
+        if(wristEnable){
+          if(wristEnablePID)
+            wrist.set(ControlMode.Position, wristHighPosition);
+          else{
+            if(Math.abs(j.getRawAxis(5)) > 0.2)
+              wrist.set(ControlMode.PercentOutput, 0.5*j.getRawAxis(5));
+            else
+              wrist.set(ControlMode.PercentOutput, 0);
+          }
+        }
+
         if(railEnable && Math.abs(wrist.getSelectedSensorPosition() - wristHighPosition) < wristTolerance) {
           targetRailPosition = railIn;
             
