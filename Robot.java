@@ -28,7 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.5b
+public class Robot extends TimedRobot {//v1.5.5c
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -91,7 +91,7 @@ public class Robot extends TimedRobot {//v1.5.5b
   int elevatorCycleCount = 0, wristCycleCount = 0;
   boolean letUpChangePID = true, letUpCompute = true, progCompute = false, letUpWristCycle = true, letUpElevatorCycle = true;
 
-  double elevatorP, elevatorI, elevatorD, wristP = .02, wristI = 0.00001, wristD = 0;
+  double elevatorP, elevatorI, elevatorD, wristP = .0095, wristI = 0.0000101, wristD = 0.01;
   SRF_PID[] pids = new SRF_PID[] {new SRF_PID(joyTune,elevatorP,elevatorI,elevatorD), new SRF_PID(joyTune,wristP,wristI,wristD)};
 
   int pidCount = 1;
@@ -255,7 +255,7 @@ public class Robot extends TimedRobot {//v1.5.5b
   }
 
   void SRF_Test(){
-    robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
+    //robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
 
    //roller code - may need to be reversed
    if(j.getRawAxis(rollerIn) > 0.3) {
