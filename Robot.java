@@ -28,7 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.4
+public class Robot extends TimedRobot {//v1.5.5b
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -251,6 +251,7 @@ public class Robot extends TimedRobot {//v1.5.4
     SmartDashboard.putNumber("CurrentGain", pids[pidCount].currentGain);
     if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
     SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
+    SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
   }
 
   void SRF_Test(){
@@ -311,12 +312,15 @@ public class Robot extends TimedRobot {//v1.5.4
     else
       bleedRelay.set(Value.kOff);
 
-    if(j.getRawButton(2))
-      isolationRelay.set(Value.kReverse);
-    else if(j.getRawButton(3))
-      isolationRelay.set(Value.kForward);
-    else
-      isolationRelay.set(Value.kOff);
+    if(!tuneMode)
+    {
+      if(j.getRawButton(2))
+        isolationRelay.set(Value.kReverse);
+      else if(j.getRawButton(3))
+        isolationRelay.set(Value.kForward);
+      else
+        isolationRelay.set(Value.kOff);
+    }
 
     if(j.getRawButton(4))
       vacuumPump.set(1);
@@ -333,10 +337,10 @@ public class Robot extends TimedRobot {//v1.5.4
   else
     bleedRelay.set(Value.kOff);
 */
-    if(j.getRawButton(3) && letUpCompute) {
+    if(tuneMode && j.getRawButton(3) && letUpCompute) {
       progCompute = true;
       letUpCompute = false;
-    } else if (!j.getRawButton(3)) {
+    } else if (tuneMode && !j.getRawButton(3)) {
       letUpCompute = true;
       progCompute = false;
       wrist.set(ControlMode.PercentOutput, 0);
@@ -398,6 +402,15 @@ public class Robot extends TimedRobot {//v1.5.4
     } else if(!j.getRawButton(1)) {
       letUpChangePID = true;
     }
+
+    
+    if(railEnable && j.getRawButton(9) && rail.getSelectedSensorPosition() < railOut)
+      rail.set(ControlMode.PercentOutput, 0.35);
+    else if(railEnable && j.getRawButton(10) && rail.getSelectedSensorPosition() > railIn)
+      rail.set(ControlMode.PercentOutput, -0.35);
+    else
+      rail.set(ControlMode.PercentOutput, 0);
+
 
     if(tuneMode)
       pids[pidCount].controlPID();    
