@@ -28,7 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.5c
+public class Robot extends TimedRobot {//v1.5.6
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -97,6 +97,7 @@ public class Robot extends TimedRobot {//v1.5.5c
   int pidCount = 1;
   double targetPositionElevator = 0;
   double targetPositionWrist = 0;
+  double targetPositionWristTemp = 0;
 
   //misc
   double elevatorInput, wristInput;
@@ -111,6 +112,7 @@ public class Robot extends TimedRobot {//v1.5.5c
   Timer timeoutTimer = new Timer();
   double startTime;
   boolean progCancelfirstTime = true;
+
   
   //enable flags
   private static final boolean elevatorEnable = false;//a boolean that enables and disables the elevator motion (to handle pre-elevator movement)
@@ -130,6 +132,8 @@ public class Robot extends TimedRobot {//v1.5.5c
 
   double vacuumValue;
   int progIndex;
+
+  boolean inTransition;
 
   @Override
   public void robotInit() {
@@ -218,6 +222,7 @@ public class Robot extends TimedRobot {//v1.5.5c
 
   @Override
   public void teleopInit() {
+    inTransition = false;
     if(homeMode){
       wrist.setSelectedSensorPosition(0);
       elevator.setSelectedSensorPosition(0);
@@ -322,10 +327,11 @@ public class Robot extends TimedRobot {//v1.5.5c
         isolationRelay.set(Value.kOff);
     }
 
-    if(j.getRawButton(4))
+  /*  if(j.getRawButton(4))
       vacuumPump.set(1);
     else
       vacuumPump.set(0);
+*/
 
    /* if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
       wrist.set(ControlMode.PercentOutput, 0.5*j.getRawAxis(5));
@@ -383,16 +389,36 @@ public class Robot extends TimedRobot {//v1.5.5c
         wristCycleCount = -1;
       wristCycleCount++;
       if(wristCycleCount == 0)
-          targetPositionWrist = wristHighPosition;
+          targetPositionWristTemp = wristHighPosition;
         else if(wristCycleCount == 1)
-          targetPositionWrist = wristMiddlePosition;
+          targetPositionWristTemp = wristMiddlePosition;
         else if(wristCycleCount == 2)
-          targetPositionWrist = wristLowPosition;
+          targetPositionWristTemp = wristLowPosition;
         else if(wristCycleCount == 3)
-          targetPositionWrist = wristUltraLowPosition;
+          targetPositionWristTemp = wristUltraLowPosition;
     } else if(!j.getRawButton(8)) {
       letUpWristCycle = true ;
-    }  
+    }
+    
+    //MAYBE FOR SRF_CONTROL
+    /////////////////////////////////////////////////////////
+    
+    if(j.getRawButton(4)){
+      if(targetPositionWristTemp == wristMiddlePosition || Math.abs(wrist.getSelectedSensorPosition()-wristMiddlePosition) < 1000)
+        targetPositionWrist = targetPositionWristTemp;
+      else{
+        targetPositionWrist = wristMiddlePosition;
+        inTransition = true;
+      }
+    }
+
+    if(inTransition && Math.abs(wrist.getSelectedSensorPosition()-wristMiddlePosition) < 500)
+    {
+      inTransition = false;
+      targetPositionWrist = targetPositionWristTemp;
+    }
+
+    /////////////////////////////////////////////////////////
 
     if(j.getRawButton(1) && letUpChangePID) {
       if(pidCount == 1)
