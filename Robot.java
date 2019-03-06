@@ -29,7 +29,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.7
+public class Robot extends TimedRobot {//v1.5.9
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -50,7 +50,7 @@ public class Robot extends TimedRobot {//v1.5.7
   TalonSRX rail;
 
   Spark vacuumPump;
-  Relay isolationRelay; //let's get more symbolic names for these
+  Relay isolationRelay;
   Relay bleedRelay;
 
   SpeedControllerGroup left;
@@ -122,9 +122,10 @@ public class Robot extends TimedRobot {//v1.5.7
   private static final boolean wristEnable = true;
   private static final boolean railEnable = true;
   
+  private static final boolean basicMode = true;
   private static final boolean testMode = false;
-  private static final boolean tuneMode = true;
-  private static final boolean homeMode = true;
+  private static final boolean tuneMode = false;
+  private static final boolean homeMode = false;//resets encoders in teleop Periodic
   private final boolean debug = false;
   private final boolean wristEnablePID = false;
 
@@ -181,7 +182,6 @@ public class Robot extends TimedRobot {//v1.5.7
     elevator.config_kI(0, elevatorI);
     elevator.config_kD(0, elevatorD);
     elevator.setSelectedSensorPosition(0);
-    elevator.set(ControlMode.Position, elevatorLowPosition);
 
     climberArm = new VictorSP(climberArmNum);
 
@@ -211,7 +211,12 @@ public class Robot extends TimedRobot {//v1.5.7
 
   @Override
   public void autonomousPeriodic() {
-    SRF_Control();
+    if(basicMode)
+      SRF_Basic();
+    else
+      SRF_Control();
+
+      SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
   }
 
   //starts the timer that controls the rumbler
@@ -244,20 +249,22 @@ public class Robot extends TimedRobot {//v1.5.7
   public void teleopPeriodic() {
     if(testMode)//SRF_PID get the kP out of that for talon tuning
       SRF_Test();
+    else if(basicMode)
+      SRF_Basic();
     else
       SRF_Control();
 
-    SmartDashboard.putBoolean("Computing?", progCompute);
+ /*   SmartDashboard.putBoolean("Computing?", progCompute);
     SmartDashboard.putNumber("Elevator Cycle Number",elevatorCycleCount);
-    SmartDashboard.putNumber("Wrist Cycle Number",wristCycleCount);  
+    SmartDashboard.putNumber("Wrist Cycle Number",wristCycleCount);*/  
     SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
-    SmartDashboard.putBoolean("progCancel", progCancel);
-    SmartDashboard.putNumber("Wrist Encoder", wrist.getSelectedSensorPosition());
-    //SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
+    /*SmartDashboard.putBoolean("progCancel", progCancel);
+    SmartDashboard.putNumber("Wrist Encoder", wrist.getSelectedSensorPosition());*/
+    SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
     //SmartDashboard.putNumber("Rail Enocder", rail.getSelectedSensorPosition());
-    SmartDashboard.putNumber("kP", pids[pidCount].k[0]/*wristP*/);
-    SmartDashboard.putNumber("kI", pids[pidCount].k[1]*1000/*wristI*/);
-    SmartDashboard.putNumber("kD", pids[pidCount].k[2]/*wristD*/);
+    /*SmartDashboard.putNumber("kP", pids[pidCount].k[0]);
+    SmartDashboard.putNumber("kI", pids[pidCount].k[1]*1000);
+    SmartDashboard.putNumber("kD", pids[pidCount].k[2]);
     SmartDashboard.putNumber("P Multiplier", pids[pidCount].mult[0]);
     SmartDashboard.putNumber("I Multiplier", pids[pidCount].mult[1]);
     SmartDashboard.putNumber("D Multiplier", pids[pidCount].mult[2]);
@@ -266,19 +273,93 @@ public class Robot extends TimedRobot {//v1.5.7
     if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
     SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
     SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
+*/
+    //testytest.pulse(10);
 
-    testytest.pulse(10);
+  }
 
+  void SRF_Basic(){
+    isolationRelay.set(Value.kForward);
+
+    if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1)
+      if(j.getRawButton(2)) 
+        robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
+      else
+        robot.arcadeDrive(j.getRawAxis(1),0.8*j.getRawAxis(0));
+    else
+      robot.arcadeDrive(0, 0);
+
+    if(j.getRawAxis(rollerIn) > 0.3) {
+      roller.set(0.4);
+    } else if(j.getRawAxis(rollerOut) > 0.3) {
+      roller.set(-0.65);
+    } else{
+      roller.set(0);
+    }
+    
+    if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
+      wrist.set(ControlMode.PercentOutput, -0.5*j.getRawAxis(5));
+    else
+      wrist.set(ControlMode.PercentOutput, 0);
+
+    //A - bleed valve
+    if(j.getRawButton(1))
+      bleedRelay.set(Value.kForward);
+    else
+      bleedRelay.set(Value.kOff);
+    
+    //B - Vaccum pump
+    if(j.getRawButton((2)))
+      vacuumPump.set(1);
+    else
+      vacuumPump.set(0);
+
+
+    if(j.getRawButton(5) && elevator.getSelectedSensorPosition() < 0) 
+      elevator.set(ControlMode.PercentOutput, .3);//elevator down
+    else if(j.getRawButton(6))
+      elevator.set(ControlMode.PercentOutput, -.5);//elevator up
+    else {
+      elevator.set(ControlMode.PercentOutput, 0);
+    }
+
+    //leftStick button - Rail
+      if(railEnable && j.getRawButton(7) /*&& rail.getSelectedSensorPosition() > railIn*/)
+        rail.set(ControlMode.PercentOutput, 0.55);
+      else if(railEnable && j.getRawButton(8) /*&& rail.getSelectedSensorPosition() < railOut*/)
+        rail.set(ControlMode.PercentOutput, -0.25);
+      else
+        rail.set(ControlMode.PercentOutput, 0);
   }
 
   void SRF_Test(){
     //robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
 
+    if(j.getRawButton(6) && !tuneMode) 
+      frontRight.set(.3);
+    else
+      frontRight.set(0);
+
+    if(j.getRawButton(5)&& !tuneMode) 
+      rearRight.set(.3);
+    else
+      rearRight.set(0);
+
+    if(j.getRawButton(9))
+      frontLeft.set(0.3);
+    else
+      frontLeft.set(0);
+
+    if(j.getRawButton(10))
+      rearLeft.set(0.3);
+    else
+      rearLeft.set(0);
+
    //roller code - may need to be reversed
    if(j.getRawAxis(rollerIn) > 0.3) {
     roller.set(0.35);
   } else if(j.getRawAxis(rollerOut) > 0.3) {
-    roller.set(-0.35);
+    roller.set(-0.55);
   } else{
     roller.set(0);
   }
@@ -324,7 +405,7 @@ public class Robot extends TimedRobot {//v1.5.7
     else
       climberArm.set(0);
 */
-    if(j.getRawButton(6))
+    if(j.getRawButton(6) && tuneMode)
       bleedRelay.set(Value.kForward);
     else
       bleedRelay.set(Value.kOff);
@@ -449,13 +530,13 @@ public class Robot extends TimedRobot {//v1.5.7
     }
 
     
-    if(railEnable && j.getRawButton(9) && rail.getSelectedSensorPosition() < railOut)
+   /* if(railEnable && j.getRawButton(9) && rail.getSelectedSensorPosition() < railOut)
       rail.set(ControlMode.PercentOutput, 0.25);
     else if(railEnable && j.getRawButton(10) && rail.getSelectedSensorPosition() > railIn)
       rail.set(ControlMode.PercentOutput, -0.45);
     else
       rail.set(ControlMode.PercentOutput, 0);
-
+*/
 
     if(tuneMode)
       pids[pidCount].controlPID();    
