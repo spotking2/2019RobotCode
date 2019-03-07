@@ -289,6 +289,7 @@ public class Robot extends TimedRobot {//v1.5.9
     else
       robot.arcadeDrive(0, 0);
 
+    //left trigger - roller in, right trigger - roller out
     if(j.getRawAxis(rollerIn) > 0.3) {
       roller.set(0.4);
     } else if(j.getRawAxis(rollerOut) > 0.3) {
@@ -297,10 +298,17 @@ public class Robot extends TimedRobot {//v1.5.9
       roller.set(0);
     }
     
-    if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
+
+    /*if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
       wrist.set(ControlMode.PercentOutput, -0.5*j.getRawAxis(5));
     else
-      wrist.set(ControlMode.PercentOutput, 0);
+      wrist.set(ControlMode.PercentOutput, 0);*/
+
+    //Newy
+    if(j.getRawButton(3) && !(targetPositionWrist <= 0))
+      targetPositionWrist += 100;
+    if(j.getRawButton(4) && !(targetPositionWrist >= wristLowPosition))
+      targetPositionWrist -= 100;
 
     //A - bleed valve
     if(j.getRawButton(1))
@@ -314,16 +322,15 @@ public class Robot extends TimedRobot {//v1.5.9
     else
       vacuumPump.set(0);
 
-
+    //leftBumper - Down, rightBumper - Up
     if(j.getRawButton(5) && elevator.getSelectedSensorPosition() < 0) 
       elevator.set(ControlMode.PercentOutput, .3);//elevator down
     else if(j.getRawButton(6))
       elevator.set(ControlMode.PercentOutput, -.5);//elevator up
-    else {
+    else
       elevator.set(ControlMode.PercentOutput, 0);
-    }
 
-    //leftStick button - Rail
+    //start, back - Rail
       if(railEnable && j.getRawButton(7) /*&& rail.getSelectedSensorPosition() > railIn*/)
         rail.set(ControlMode.PercentOutput, 0.55);
       else if(railEnable && j.getRawButton(8) /*&& rail.getSelectedSensorPosition() < railOut*/)
