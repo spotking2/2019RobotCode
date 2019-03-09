@@ -8,6 +8,7 @@ import com.ctre.phoenix.motorcontrol.can.VictorSPX;
 
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.DigitalInput;
@@ -29,10 +30,12 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.10
+public class Robot extends TimedRobot {//v1.5.11
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
+
+  stuck in a thing for automated vacuum pump and changed B to opening isolation valve
 */
 
   //Initialization
@@ -100,6 +103,8 @@ public class Robot extends TimedRobot {//v1.5.10
   double targetPositionWrist = 0;
   double targetPositionWristTemp = 0;
 
+  Timer wristPosition = new Timer();
+
   //misc
   double elevatorInput, wristInput;
   NetworkTable table;
@@ -142,6 +147,8 @@ public class Robot extends TimedRobot {//v1.5.10
 
   boolean inTransition;
   boolean letUpY;
+
+  boolean recharging;
 
   @Override
   public void robotInit() {
@@ -203,10 +210,14 @@ public class Robot extends TimedRobot {//v1.5.10
 
     leftSide = new Encoder(2,3);
     vacuumSensor = new AnalogInput(vacuumSensorNum);
+    
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
   }
 
   @Override
   public void autonomousInit() {
+    recharging = false;
   }
 
   @Override
@@ -234,6 +245,7 @@ public class Robot extends TimedRobot {//v1.5.10
 
   @Override
   public void teleopInit() {
+    recharging = false;
     letUpY = true;
     inTransition = false;
     if(homeMode){
@@ -253,6 +265,8 @@ public class Robot extends TimedRobot {//v1.5.10
       SRF_Basic();
     else
       SRF_Control();
+
+      
 
  /*   SmartDashboard.putBoolean("Computing?", progCompute);
     SmartDashboard.putNumber("Elevator Cycle Number",elevatorCycleCount);
@@ -279,7 +293,21 @@ public class Robot extends TimedRobot {//v1.5.10
   }
 
   void SRF_Basic(){
-    isolationRelay.set(Value.kForward);
+
+    //automated vacuum pump
+    if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold)
+      recharging = true;
+
+    if(recharging){
+      if(vacuumSensor.getValue() < vacuumThreshold) {
+        recharging = false;
+        vacuumPump.set(0);
+      }
+      else
+        vacuumPump.set(1);
+    }
+    else
+      vacuumPump.set(0);
 
     if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1)
       if(j.getRawButton(2)) 
@@ -309,6 +337,7 @@ public class Robot extends TimedRobot {//v1.5.10
       targetPositionWrist += 100;
     if(j.getRawButton(4) && !(targetPositionWrist >= wristLowPosition))
       targetPositionWrist -= 100;
+    wrist.set(ControlMode.Position, targetPositionWrist);
 
     //A - bleed valve
     if(j.getRawButton(1))
@@ -317,10 +346,16 @@ public class Robot extends TimedRobot {//v1.5.10
       bleedRelay.set(Value.kOff);
     
     //B - Vaccum pump
-    if(j.getRawButton((2)))
+    //Will also need to set up climber switching logic
+    //use the second controller to switch isolation
+    if(j.getRawButton(2))
+      isolationRelay.set(Value.kForward);
+    else
+      isolationRelay.set(Value.kOff);
+   /* if(j.getRawButton((2)))
       vacuumPump.set(1);
     else
-      vacuumPump.set(0);
+      vacuumPump.set(0);*/
 
     //leftBumper - Down, rightBumper - Up
     if(j.getRawButton(5) && elevator.getSelectedSensorPosition() < 0) 
