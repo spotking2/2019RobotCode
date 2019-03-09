@@ -30,7 +30,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.5.11
+public class Robot extends TimedRobot {//v1.6
 /*
   added some new positions for elevator and wrist after talking with Nick
   have confirmation button press before release of hatch for all functions (tap button 2nd time)
@@ -109,6 +109,7 @@ public class Robot extends TimedRobot {//v1.5.11
   double elevatorInput, wristInput;
   NetworkTable table;
   DigitalOutput testytest = new DigitalOutput(5);
+  DigitalOutput bleedOutput = new DigitalOutput(6);
   boolean boolTest = false;
 
   //place holders
@@ -141,6 +142,7 @@ public class Robot extends TimedRobot {//v1.5.11
   boolean relayOn = false;
   boolean continuedLetUp = false;
   
+  boolean bleedIsSet;
 
   double vacuumValue;
   int progIndex;
@@ -162,7 +164,8 @@ public class Robot extends TimedRobot {//v1.5.11
     //driveBase
     frontLeft = new Talon(0);
     rearLeft = new Talon(1);
-    frontRight = new Talon(2);
+    int value = 2;
+    frontRight = new Talon(value);
     rearRight = new Talon(3);
 
     left = new SpeedControllerGroup(frontLeft,rearLeft);
@@ -205,18 +208,19 @@ public class Robot extends TimedRobot {//v1.5.11
     isolationRelay = new Relay(isolationRelayNum, Direction.kBoth);
     bleedRelay = new Relay(bleedRelayNum/*, Relay.Direction.kForward*/);
 
-    bleedRelay.set(Value.kOff);
+    setBleed(Value.kOff);//bleedRelay.set(Value.kOff);
     isolationRelay.set(Value.kOff);
 
-    leftSide = new Encoder(2,3);
+    leftSide = new Encoder(value,3);
     vacuumSensor = new AnalogInput(vacuumSensorNum);
-    
-    NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
   }
 
   @Override
   public void autonomousInit() {
+    bleedIsSet = false;
     recharging = false;
   }
 
@@ -228,6 +232,8 @@ public class Robot extends TimedRobot {//v1.5.11
       SRF_Control();
 
       SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
+      NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
+      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
   }
 
   //starts the timer that controls the rumbler
@@ -245,6 +251,7 @@ public class Robot extends TimedRobot {//v1.5.11
 
   @Override
   public void teleopInit() {
+    bleedIsSet = false;
     recharging = false;
     letUpY = true;
     inTransition = false;
@@ -257,8 +264,19 @@ public class Robot extends TimedRobot {//v1.5.11
     progressCount = 0;
   }
 
+  void setBleed(Value bleeding){
+    //bleedOutput.pulse(1);
+    /*if(bleeding)
+      bleedRelay.set(Value.kForward);
+    else
+      bleedRelay.set(Value.kOff);*/
+      bleedRelay.set(bleeding);
+    //bleedOutput.set(false);
+  }
+
   @Override
   public void teleopPeriodic() {
+    testytest.set(true);
     if(testMode)//SRF_PID get the kP out of that for talon tuning
       SRF_Test();
     else if(basicMode)
@@ -288,14 +306,16 @@ public class Robot extends TimedRobot {//v1.5.11
     SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
     SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
 */
-    //testytest.pulse(10);
-
+    
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+    testytest.set(false);
   }
 
   void SRF_Basic(){
-
+    //isolationRelay.set(Value.kForward);
     //automated vacuum pump
-    if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold)
+/*    if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold)
       recharging = true;
 
     if(recharging){
@@ -308,7 +328,7 @@ public class Robot extends TimedRobot {//v1.5.11
     }
     else
       vacuumPump.set(0);
-
+*/
     if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1)
       if(j.getRawButton(2)) 
         robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
@@ -326,36 +346,42 @@ public class Robot extends TimedRobot {//v1.5.11
       roller.set(0);
     }
     
-
-    /*if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
+    /*
+    if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable)
       wrist.set(ControlMode.PercentOutput, -0.5*j.getRawAxis(5));
     else
-      wrist.set(ControlMode.PercentOutput, 0);*/
-
+      wrist.set(ControlMode.PercentOutput, 0);
+    */
     //Newy
-    if(j.getRawButton(3) && !(targetPositionWrist <= 0))
+    /*if(j.getRawButton(3) && !(targetPositionWrist <= 0))
       targetPositionWrist += 100;
     if(j.getRawButton(4) && !(targetPositionWrist >= wristLowPosition))
       targetPositionWrist -= 100;
-    wrist.set(ControlMode.Position, targetPositionWrist);
+    wrist.set(ControlMode.Position, targetPositionWrist);*/
 
     //A - bleed valve
-    if(j.getRawButton(1))
-      bleedRelay.set(Value.kForward);
-    else
-      bleedRelay.set(Value.kOff);
-    
+  //  if(bleedIsSet){
+      if(j.getRawButton(1) && !bleedIsSet){
+        setBleed(Value.kForward);//bleedRelay.set(Value.kForward);
+        bleedIsSet = true;
+      }
+      else if(!j.getRawButton(1) && bleedIsSet){
+        setBleed(Value.kOff);//bleedRelay.set(Value.kOff);
+        bleedIsSet = false;
+      }
+    //}
+
     //B - Vaccum pump
     //Will also need to set up climber switching logic
     //use the second controller to switch isolation
-    if(j.getRawButton(2))
+    /*if(j.getRawButton(2))
       isolationRelay.set(Value.kForward);
     else
-      isolationRelay.set(Value.kOff);
-   /* if(j.getRawButton((2)))
+      isolationRelay.set(Value.kOff);*/
+   if(j.getRawButton((2)))
       vacuumPump.set(1);
     else
-      vacuumPump.set(0);*/
+      vacuumPump.set(0);
 
     //leftBumper - Down, rightBumper - Up
     if(j.getRawButton(5) && elevator.getSelectedSensorPosition() < 0) 
