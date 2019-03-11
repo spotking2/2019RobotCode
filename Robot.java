@@ -222,6 +222,8 @@ public class Robot extends TimedRobot {//v1.6
   public void autonomousInit() {
     bleedIsSet = false;
     recharging = false;
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
   }
 
   @Override
@@ -232,8 +234,7 @@ public class Robot extends TimedRobot {//v1.6
       SRF_Control();
 
       SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
-      NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
-      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+      
   }
 
   //starts the timer that controls the rumbler
@@ -262,10 +263,13 @@ public class Robot extends TimedRobot {//v1.6
     }
      j.setRumble(RumbleType.kLeftRumble, 0);
     progressCount = 0;
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
+    NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
   }
 
-  void setBleed(Value bleeding){
-    //bleedOutput.pulse(1);
+  public void setBleed(Value bleeding){
+    bleedOutput.pulse(10000);
+    //bleedOutput.set(true);
     /*if(bleeding)
       bleedRelay.set(Value.kForward);
     else
@@ -306,9 +310,6 @@ public class Robot extends TimedRobot {//v1.6
     SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
     SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
 */
-    
-    NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
-    NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
     testytest.set(false);
   }
 
@@ -362,11 +363,13 @@ public class Robot extends TimedRobot {//v1.6
     //A - bleed valve
   //  if(bleedIsSet){
       if(j.getRawButton(1) && !bleedIsSet){
-        setBleed(Value.kForward);//bleedRelay.set(Value.kForward);
+        setBleed(Value.kForward);
+        //bleedRelay.set(Value.kForward);
         bleedIsSet = true;
       }
       else if(!j.getRawButton(1) && bleedIsSet){
-        setBleed(Value.kOff);//bleedRelay.set(Value.kOff);
+        setBleed(Value.kOff);
+        //bleedRelay.set(Value.kOff);
         bleedIsSet = false;
       }
     //}
