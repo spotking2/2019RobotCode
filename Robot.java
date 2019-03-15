@@ -30,13 +30,11 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.1
-/*
-  added some new positions for elevator and wrist after talking with Nick
-  have confirmation button press before release of hatch for all functions (tap button 2nd time)
-
-  stuck in a thing for automated vacuum pump and changed B to opening isolation valve
-*/
+public class Robot extends TimedRobot {//v1.6.1a
+  /*
+    added some new functionality (elevator raising when wrist goes down and some other stuff)
+    also added trouble shooting mini over run timer and did a partial code review  
+ */
 
   //Initialization
   Talon frontLeft;
@@ -53,6 +51,7 @@ public class Robot extends TimedRobot {//v1.6.1
   TalonSRX rail;
 
   Spark vacuumPump;
+  //These were taken out when we added the untested DIO support
   //Relay isolationRelay;
   //Relay bleedRelay;
 
@@ -67,7 +66,7 @@ public class Robot extends TimedRobot {//v1.6.1
   DigitalInput elevatorHigh;
   DigitalInput elevatorLow;
   
-  //Do we want encoder for each side???
+  //Encoders are currently unimplemented
   AnalogInput vacuumSensor;
   Encoder leftSide;
   Encoder rightSide;
@@ -125,6 +124,9 @@ public class Robot extends TimedRobot {//v1.6.1
 
   Timer rumbleTimer = new Timer();
   Timer timeoutTimer = new Timer();
+  Timer loopTimer = new Timer();
+  double lastLoopTime;
+  long SRF_OverrunCount; //this should serve as a rough metric to gauge what's causing loop time to spike
   double startTime;
   boolean progCancelfirstTime = true;
 
@@ -135,8 +137,8 @@ public class Robot extends TimedRobot {//v1.6.1
   private static final boolean railEnable = true;
   
   private static final boolean testMode = false;
-  private static final boolean tuneMode = false;
-  private static final boolean homeMode = false;//resets encoders in teleop Periodic
+  private static final boolean tuneMode = true;//should be left on as long as we're in basic to facilitate climbing
+  private static final boolean homeMode = false;//resets encoders in teleop Periodic, may need to be true when testing outside of match play
   private final boolean debug = false;
   private final boolean wristEnablePID = false;
 
@@ -166,13 +168,13 @@ public class Robot extends TimedRobot {//v1.6.1
     elevatorLow = new DigitalInput(elevatorLowNum);
 
     j = new Joystick(0);
-    if(tuneMode)
+    if(tuneMode)//no issue with climber as long as we leave it on and stay in basic
       joyTune = new Joystick(1);
 
     //driveBase
     frontLeft = new Talon(0);
     rearLeft = new Talon(1);
-    int value = 2;
+    int value = 2;//XXX-what the heck is this for?
     frontRight = new Talon(value);
     rearRight = new Talon(3);
 
@@ -207,6 +209,8 @@ public class Robot extends TimedRobot {//v1.6.1
 
     vacuumPump = new Spark(vacuumPumpNum);
 
+    //All the relay stuff is currently obselete because DIO
+
     //Spike direction choosen at random, may need to be changed/not be neccasary
     //Written with following presumption:
     //isolationRelay forward = isolation valve for manipulater
@@ -238,8 +242,7 @@ public class Robot extends TimedRobot {//v1.6.1
   public void autonomousPeriodic() {
     SRF_Basic();
 
-      SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
-      
+    SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());  
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -257,23 +260,31 @@ public class Robot extends TimedRobot {//v1.6.1
     timeoutTimer.start();
   }
 
+
  public void setBleed(boolean v){
     bleedTest.pulse(1000);
     //bleedTest.set(true);
     //bleedRelay.set(bleeding);
-      bleedOutput.set(v);
+    bleedOutput.set(v);
     //bleedTest.set(false);
   }
+
 
   public void setIsolation(boolean manV, boolean climbV) {
     isolateManipulator.set(manV);
     isolateClimber.set(climbV);
   }
 
+
  ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
   @Override
   public void teleopInit() {
+    loopTimer.reset();
+    loopTimer.start();
+    SRF_OverrunCount = 0;
+
     bleedIsSet = false;
     recharging = false;
     letUpY = true;
@@ -293,6 +304,8 @@ public class Robot extends TimedRobot {//v1.6.1
 
   @Override
   public void teleopPeriodic() {
+    lastLoopTime = loopTimer.get();
+
     testytest.set(true);
     if(testMode)//SRF_PID get the kP out of that for talon tuning
       SRF_Test();
@@ -319,12 +332,19 @@ public class Robot extends TimedRobot {//v1.6.1
     if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
     SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
     SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
-*/
+*/  SmartDashboard.putNumber("Overrun count", SRF_OverrunCount);
+
     testytest.set(false);
+    
+    if(loopTimer.get() > 0.015)
+      SRF_OverrunCount++;
   }
+
 
   void SRF_Basic(){
     //isolationRelay.set(Value.kForward);
+
+    //XXX-add this back in once we have a vacuum sensor mounted
     //automated vacuum pump
 /*    if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold)
       recharging = true;
@@ -341,7 +361,7 @@ public class Robot extends TimedRobot {//v1.6.1
       vacuumPump.set(0);
 */
     if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1)
-      if(j.getRawButton(2)) 
+      if(j.getRawButton(2)) //remember to change when B gets messed with, also may just need it straight up taken out for practice bot
         robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
       else
         robot.arcadeDrive(j.getRawAxis(1),0.8*j.getRawAxis(0));
@@ -353,7 +373,7 @@ public class Robot extends TimedRobot {//v1.6.1
       roller.set(0.4);
     } else if(j.getRawAxis(rollerOut) > 0.3) {
       roller.set(-0.65);
-    } else{
+    } else {
       roller.set(0);
     }
     
@@ -363,7 +383,7 @@ public class Robot extends TimedRobot {//v1.6.1
     } else
       wrist.set(ControlMode.PercentOutput, 0);
     
-    if(progAutoElevator) {
+    if(progAutoElevator) {//XXX-should we change this name? I was a little confused as to what it was for until I did some looking around.
       if(elevator.getSelectedSensorPosition() > -3000)//XXX-is this the correct comparitor?
         elevator.set(ControlMode.PercentOutput, -.2);
       else {
@@ -371,29 +391,28 @@ public class Robot extends TimedRobot {//v1.6.1
         progAutoElevator = false;
       }
     }
-    //Newy
+
+    //---Consider Removing---//
+    //New
     /*if(j.getRawButton(3) && !(targetPositionWrist <= 0))
       targetPositionWrist += 100;
     if(j.getRawButton(4) && !(targetPositionWrist >= wristLowPosition))
       targetPositionWrist -= 100;
     wrist.set(ControlMode.Position, targetPositionWrist);*/
 
+    //XXX-try taking out bleedIsSet!!!
     //A - bleed valve
-  //  if(bleedIsSet){
-      if(j.getRawButton(1) && !bleedIsSet){
-        setBleed(true);
-        bleedIsSet = true;
-      }
-      else if(!j.getRawButton(1) && bleedIsSet){
-        setBleed(false);
-        bleedIsSet = false;
-      }
-    //}
+    if(j.getRawButton(1) && !bleedIsSet){
+      setBleed(true);
+      bleedIsSet = true;
+    }
+    else if(!j.getRawButton(1) && bleedIsSet){
+      setBleed(false);
+      bleedIsSet = false;
+    }
 
     //B - Vaccum pump
-    //Will also need to set up climber switching logic
-    //use the second controller to switch isolation
-    /*if(j.getRawButton(2))
+    /*if(j.getRawButton(2)) //This is pointless as long as we ain't got no relays
       isolationRelay.set(Value.kForward);
     else
       isolationRelay.set(Value.kOff);*/
@@ -419,7 +438,8 @@ public class Robot extends TimedRobot {//v1.6.1
         rail.set(ControlMode.PercentOutput, 0);
   }
 
-  void SRF_Test(){
+
+  void SRF_Test(){//we can't move in this mode
     //robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
 
     if(j.getRawButton(6) && !tuneMode) 
