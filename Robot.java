@@ -30,7 +30,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.1a
+public class Robot extends TimedRobot {//v1.6.2
   /*
     added some new functionality (elevator raising when wrist goes down and some other stuff)
     also added trouble shooting mini over run timer and did a partial code review  
@@ -89,7 +89,7 @@ public class Robot extends TimedRobot {//v1.6.1a
  
   int progressCount;
 
-  boolean progAutoElevator = false;
+  boolean progSmallElevatorRaise = false;
 
   //PID
   int elevatorTuner = 0, wristTuner = 1;
@@ -174,8 +174,7 @@ public class Robot extends TimedRobot {//v1.6.1a
     //driveBase
     frontLeft = new Talon(0);
     rearLeft = new Talon(1);
-    int value = 2;//XXX-what the heck is this for?
-    frontRight = new Talon(value);
+    frontRight = new Talon(2);
     rearRight = new Talon(3);
 
     left = new SpeedControllerGroup(frontLeft,rearLeft);
@@ -223,7 +222,7 @@ public class Robot extends TimedRobot {//v1.6.1a
     //setBleed(Value.kOff);//bleedRelay.set(Value.kOff);
     //isolationRelay.set(Value.kOff);
 
-    leftSide = new Encoder(value,3);
+    leftSide = new Encoder(2,3);
     vacuumSensor = new AnalogInput(vacuumSensorNum);
 
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
@@ -344,9 +343,28 @@ public class Robot extends TimedRobot {//v1.6.1a
   void SRF_Basic(){
     //isolationRelay.set(Value.kForward);
 
-    //XXX-add this back in once we have a vacuum sensor mounted
+    if(tuneMode) {
+      if(joyTune.getRawAxis(2) > 0.2) {
+        //they move one way
+      }
+      else if(joyTune.getRawAxis(3) > 0.2) {
+        //they move the other way
+      }
+      else {
+        if(Math.abs(joyTune.getRawAxis(1)) > 0.1)
+          climberArm.set(joyTune.getRawAxis(1));
+        else
+          climberArm.set(0);
+        
+        if(Math.abs(joyTune.getRawAxis(5)) > 0.1)
+          climberWinch.set(joyTune.getRawAxis(5));
+        else
+          climberWinch.set(0);
+      }
+    }
+
     //automated vacuum pump
-/*    if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold)
+    if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold)
       recharging = true;
 
     if(recharging){
@@ -359,13 +377,13 @@ public class Robot extends TimedRobot {//v1.6.1a
     }
     else
       vacuumPump.set(0);
-*/
-    if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1)
+
+    if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1) {
       if(j.getRawButton(2)) //remember to change when B gets messed with, also may just need it straight up taken out for practice bot
         robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
       else
         robot.arcadeDrive(j.getRawAxis(1),0.8*j.getRawAxis(0));
-    else
+    } else
       robot.arcadeDrive(0, 0);
 
     //left trigger - roller in, right trigger - roller out
@@ -379,18 +397,18 @@ public class Robot extends TimedRobot {//v1.6.1a
     
     if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable) {
       wrist.set(ControlMode.PercentOutput, -0.5*j.getRawAxis(5));
-      progAutoElevator = true;
+      progSmallElevatorRaise = true;
     } else
       wrist.set(ControlMode.PercentOutput, 0);
     
-    if(progAutoElevator) {//XXX-should we change this name? I was a little confused as to what it was for until I did some looking around.
-      if(elevator.getSelectedSensorPosition() > -3000)//XXX-is this the correct comparitor?
+    if(progSmallElevatorRaise) {
+      if(elevator.getSelectedSensorPosition() > -3000)
         elevator.set(ControlMode.PercentOutput, -.2);
       else {
         elevator.set(ControlMode.PercentOutput, 0);
-        progAutoElevator = false;
+        progSmallElevatorRaise = false;
       }
-    }
+    }  
 
     //---Consider Removing---//
     //New
@@ -416,10 +434,10 @@ public class Robot extends TimedRobot {//v1.6.1a
       isolationRelay.set(Value.kForward);
     else
       isolationRelay.set(Value.kOff);*/
-   if(j.getRawButton((2)))
+    /*if(j.getRawButton((2)))
       vacuumPump.set(1);
     else
-      vacuumPump.set(0);
+      vacuumPump.set(0);*/
 
     //leftBumper - Down, rightBumper - Up
     if(j.getRawButton(5) && elevator.getSelectedSensorPosition() < 0) 
@@ -437,6 +455,10 @@ public class Robot extends TimedRobot {//v1.6.1a
       else
         rail.set(ControlMode.PercentOutput, 0);
   }
+
+
+  //////////////////////////////////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////////////////
 
 
   void SRF_Test(){//we can't move in this mode
@@ -470,42 +492,6 @@ public class Robot extends TimedRobot {//v1.6.1a
   } else{
     roller.set(0);
   }
-
-   /* if(j.getRawButton(1) && letUpSystem) {
-      testSystem++;
-      if(testSystem == 6)
-        testSystem = 0;
-      letUpSystem = false;
-    }
-    else if(!j.getRawButton(1))
-      letUpSystem = true;
-
-    testAxis = j.getRawAxis(5);
-    if(Math.abs(testAxis) > 0.2)
-    {
-      //if(testSystem==0)
-        //climberArm.set(testAxis);
-      //else if(testSystem==1 && wristEnable)
-        //wrist.set(ControlMode.PercentOutput, testAxis);
-      /*else*//* if(testSystem==2)
-        roller.set(testAxis);
-      else if(testSystem==3 && elevatorEnable)
-        elevator.set(ControlMode.PercentOutput,testAxis);
-      else if(testSystem==4 && railEnable)
-        rail.set(ControlMode.PercentOutput,testAxis);
-      else if(testSystem==5)
-        vacuumPump.set(testAxis);
-      
-
-
-    }else {
-      climberArm.set(0);
-      wrist.set(ControlMode.PercentOutput, 0);
-      roller.set(0);
-      elevator.set(ControlMode.PercentOutput,0);
-      rail.set(ControlMode.PercentOutput,0);
-      vacuumPump.set(0);
-    }*/
 
     /*if(j.getRawButton(5))
       climberArm.set(1);
@@ -651,14 +637,7 @@ public class Robot extends TimedRobot {//v1.6.1a
     SmartDashboard.putNumber("Temp Target Wrist", targetPositionWristTemp);
     SmartDashboard.putNumber("testSystem",testSystem);
     SmartDashboard.putBoolean("inTransition", inTransition);
-  }
-
-
-/////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////
-
-
-  
+  }  
 
   @Override
   public void testInit() {
