@@ -30,7 +30,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.2
+public class Robot extends TimedRobot {//v1.6.2a
   /*
     added some new functionality (elevator raising when wrist goes down and some other stuff)
     also added trouble shooting mini over run timer and did a partial code review  
@@ -645,6 +645,20 @@ public class Robot extends TimedRobot {//v1.6.2
 
   @Override
   public void testPeriodic() {
+    if(j.getRawButton(1))
+      bleedOutput.set(true);
+    else
+      bleedOutput.set(false);
+    
+    if(j.getRawButton(2))
+      isolateManipulator.set(true);
+    else
+      isolateManipulator.set(false);
+
+    if(j.getRawButton(3))
+      isolateClimber.set(true);
+    else
+      isolateClimber.set(false);
   }
 
 }
