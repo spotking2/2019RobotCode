@@ -31,7 +31,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.3
+public class Robot extends TimedRobot {//v1.6.4
   /*
     added some new functionality (elevator raising when wrist goes down and some other stuff)
     also added trouble shooting mini over run timer and did a partial code review  
@@ -167,6 +167,10 @@ public class Robot extends TimedRobot {//v1.6.3
 
   boolean disableVacPump = false;
   boolean elevatorRaiseDone = false;
+  int elevatorStopPos = 0;
+  boolean elevatorMoving = false;
+
+  boolean closeEnough;
 
   @Override
   public void robotInit() {
@@ -238,6 +242,7 @@ public class Robot extends TimedRobot {//v1.6.3
 
   @Override
   public void autonomousInit() {
+    closeEnought = false;
     bleedIsSet = false;
     recharging = false;
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
@@ -291,6 +296,7 @@ public class Robot extends TimedRobot {//v1.6.3
     loopTimer.start();
     SRF_OverrunCount = 0;
 
+    closeEnough = false;
     bleedIsSet = false;
     recharging = false;
     letUpY = true;
@@ -341,6 +347,7 @@ public class Robot extends TimedRobot {//v1.6.3
   */SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
     SmartDashboard.putNumber("Overrun count", SRF_OverrunCount);
     SmartDashboard.putBoolean("Correct Vacuum level", vacuumAchieved);
+    SmartDashboard.putBoolean("Close Enough", closeEnough);
     //SmartDashboard.putBoolean("progSmallElevatorRaise", progSmallElevatorRaise);
     //SmartDashboard.putBoolean("elevatorRaiseDone", elevatorRaiseDone);
 
@@ -353,6 +360,11 @@ public class Robot extends TimedRobot {//v1.6.3
 
   void SRF_Basic(){
     //setIsolation(true, false);
+
+    if(Math.abs(NetworkTableInstance.getDefault().getTable("limelight").getEntry("tx").getDouble(0)) < 4)
+      closeEnough = true;
+    else
+      closeEnough = false;
 
     if(tuneMode) {
       if(joyTune.getRawAxis(2) > 0.2) {
@@ -400,15 +412,15 @@ public class Robot extends TimedRobot {//v1.6.3
     //left trigger - roller in, right trigger - roller out
     if(j.getRawAxis(rollerIn) > 0.3) {
       roller.set(0.55);
-    } else if(j.getRawAxis(rollerOut) > 0.3) {
-      roller.set(-0.55);
+    } else if(j.getRawAxis(rollerOut) > 0.1) {
+      roller.set(-j.getRawAxis(rollerOut));
     } else {
       roller.set(.1);
     }
     
     if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable) {
-      if(wrist.getSelectedSensorPosition() < 148000 || j.getRawAxis(5) > 0)
-        wrist.set(ControlMode.PercentOutput, -0.5*j.getRawAxis(5));
+      if(wrist.getSelectedSensorPosition() < 142000 || j.getRawAxis(5) > 0)
+        wrist.set(ControlMode.PercentOutput, -0.3*j.getRawAxis(5));
       else
         wrist.set(ControlMode.PercentOutput, 0);
 
@@ -458,12 +470,13 @@ public class Robot extends TimedRobot {//v1.6.3
       vacuumPump.set(0);*/
 
     //leftBumper - Down, rightBumper - Up
-    if(j.getRawButton(5) /*&& elevator.getSelectedSensorPosition() < 0*/) 
+    if(j.getRawButton(5) /*&& elevator.getSelectedSensorPosition() < 0*/) {
       elevator.set(ControlMode.PercentOutput, -.3);//elevator down
-    else if(j.getRawButton(6))
+    } else if(j.getRawButton(6)){
       elevator.set(ControlMode.PercentOutput, .5);//elevator up
-    else if(!progSmallElevatorRaise)
+    } else if(!progSmallElevatorRaise) {
       elevator.set(ControlMode.PercentOutput, 0);
+    }
 
     //start, back - Rail
       if(railEnable && j.getRawButton(7) && rail.getSelectedSensorPosition() < railOut)//railOut
@@ -477,6 +490,8 @@ public class Robot extends TimedRobot {//v1.6.3
         vacuumAchieved = true;
       else
         vacuumAchieved = false;
+
+      
   }
 
 
