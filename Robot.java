@@ -31,7 +31,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.4
+public class Robot extends TimedRobot {//v1.6.4a
   /*
     added some new functionality (elevator raising when wrist goes down and some other stuff)
     also added trouble shooting mini over run timer and did a partial code review  
@@ -242,7 +242,7 @@ public class Robot extends TimedRobot {//v1.6.4
 
   @Override
   public void autonomousInit() {
-    closeEnought = false;
+    closeEnough = false;
     bleedIsSet = false;
     recharging = false;
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
