@@ -27,11 +27,12 @@ import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.Relay.Direction;
 import edu.wpi.first.wpilibj.Relay.Value;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.5
+public class Robot extends TimedRobot {//v1.6.6
   /*
     added some new functionality (elevator raising when wrist goes down and some other stuff)
     also added trouble shooting mini over run timer and did a partial code review  
@@ -172,6 +173,12 @@ public class Robot extends TimedRobot {//v1.6.5
 
   boolean closeEnough;
 
+  boolean elevatorControlMode = false;
+  int elevatorControlModeTarget;
+  final int elevatorCargoShip = 0, elevatorMidHatch = 0;//Set to actual values
+  
+  SendableChooser singleInit;
+
   @Override
   public void robotInit() {
     elevatorHigh = new DigitalInput(elevatorHighNum);
@@ -238,10 +245,19 @@ public class Robot extends TimedRobot {//v1.6.5
 
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("stream").setNumber(2);
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+  
+    singleInit.addDefault("Competition",0);
+    singleInit.addObject("Test",1);
+    SmartDashboard.putData(singleInit);
+  }
+
+  public void SRF_Init() {
+
   }
 
   @Override
   public void autonomousInit() {
+    SRF_Init();
     closeEnough = false;
     bleedIsSet = false;
     recharging = false;
@@ -254,6 +270,10 @@ public class Robot extends TimedRobot {//v1.6.5
     SRF_Basic();
 
     SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());  
+  }
+
+  public void disabledPeriodic() {
+
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -292,6 +312,8 @@ public class Robot extends TimedRobot {//v1.6.5
 
   @Override
   public void teleopInit() {
+    if((int)singleInit.getSelected() == 1)
+      SRF_Init();
     loopTimer.reset();
     loopTimer.start();
     SRF_OverrunCount = 0;
@@ -415,6 +437,12 @@ public class Robot extends TimedRobot {//v1.6.5
     else
       vacuumPump.set(0);
     
+
+    if(j.getRawButton(9))
+      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(3);
+    else
+      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+
     if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1) {
       if(j.getRawButton(3)) //remember to change when B gets messed with, also may just need it straight up taken out for practice bot
         robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
@@ -484,6 +512,18 @@ public class Robot extends TimedRobot {//v1.6.5
     else
       vacuumPump.set(0);*/
 
+    //X
+    if(j.getRawButton(3)) {
+      elevatorControlMode = true;
+      elevatorControlModeTarget = elevatorCargoShip;
+    }
+
+    //Y
+    if(j.getRawButton(4)) {
+      elevatorControlMode = true;
+      elevatorControlModeTarget = elevatorMidHatch;
+    }
+
     //leftBumper - Down, rightBumper - Up
     if(j.getRawButton(5) /*&& elevator.getSelectedSensorPosition() < 0*/) {
       elevator.set(ControlMode.PercentOutput, .3);//elevator down
@@ -507,7 +547,9 @@ public class Robot extends TimedRobot {//v1.6.5
     else
       vacuumAchieved = false;
 
-      
+    if(elevatorControlMode) {
+      //Elevator PID(?) Code
+    }
   }
 
 
