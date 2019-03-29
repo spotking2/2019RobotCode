@@ -32,7 +32,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.6
+public class Robot extends TimedRobot {//v1.6.6a
   /*
     added some new functionality (elevator raising when wrist goes down and some other stuff)
     also added trouble shooting mini over run timer and did a partial code review  
@@ -100,6 +100,7 @@ public class Robot extends TimedRobot {//v1.6.6
 
   double elevatorP, elevatorI, elevatorD, wristP = .0095, wristI = 0.0000101, wristD = 0.01;
   SRF_PID[] pids = new SRF_PID[] {new SRF_PID(joyTune,elevatorP,elevatorI,elevatorD), new SRF_PID(joyTune,wristP,wristI,wristD)};
+  int elev = 0;
 
   int pidCount = 1;
   double targetPositionElevator = 0;
@@ -179,13 +180,15 @@ public class Robot extends TimedRobot {//v1.6.6
   
   SendableChooser singleInit;
 
+  double elevatorSpeed = 0;
+
   @Override
   public void robotInit() {
     elevatorHigh = new DigitalInput(elevatorHighNum);
     elevatorLow = new DigitalInput(elevatorLowNum);
 
     j = new Joystick(0);
-    if(tuneMode)//no issue with climber as long as we leave it on and stay in basic
+    //if(tuneMode)//no issue with climber as long as we leave it on and stay in basic
       joyTune = new Joystick(1);
 
     //driveBase
@@ -214,9 +217,7 @@ public class Robot extends TimedRobot {//v1.6.6
 
     elevator = new TalonSRX(elevatorNum);
     elevator.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, 0, 0);
-    elevator.config_kP(0, elevatorP);
-    elevator.config_kI(0, elevatorI);
-    elevator.config_kD(0, elevatorD);
+    pids[elev].setPID(elevatorP, elevatorI, elevatorD);
     elevator.setSelectedSensorPosition(0);
     //elevator.setNeutralMode(NeutralMode.Brake);
 
@@ -517,20 +518,24 @@ public class Robot extends TimedRobot {//v1.6.6
       elevatorControlMode = true;
       elevatorControlModeTarget = elevatorCargoShip;
     }
-
     //Y
-    if(j.getRawButton(4)) {
+    else if(j.getRawButton(4)) {
       elevatorControlMode = true;
       elevatorControlModeTarget = elevatorMidHatch;
     }
 
     //leftBumper - Down, rightBumper - Up
     if(j.getRawButton(5) /*&& elevator.getSelectedSensorPosition() < 0*/) {
-      elevator.set(ControlMode.PercentOutput, .3);//elevator down
+      elevatorSpeed = 0.3;
+      elevatorControlMode = false;
+      // elevator.set(ControlMode.PercentOutput, .3);//elevator down
     } else if(j.getRawButton(6) && elevator.getSelectedSensorPosition() > -590000){
-      elevator.set(ControlMode.PercentOutput, -.5);//elevator up
+      elevatorSpeed = -0.5;
+      elevatorControlMode = false;
+      //elevator.set(ControlMode.PercentOutput, -.5);//elevator up
     } else if(!progSmallElevatorRaise) {
-      elevator.set(ControlMode.PercentOutput, 0);
+      elevatorSpeed = 0;
+      //elevator.set(ControlMode.PercentOutput, 0);
     }
 
     //start, back - Rail
@@ -547,8 +552,18 @@ public class Robot extends TimedRobot {//v1.6.6
     else
       vacuumAchieved = false;
 
-    if(elevatorControlMode) {
-      //Elevator PID(?) Code
+    if(!progSmallElevatorRaise)
+    {
+      if(elevatorControlMode) {
+        //Elevator PID(?) Code
+        elevator.set(ControlMode.Position, elevatorControlModeTarget);
+      }
+      else
+        elevator.set(ControlMode.PercentOutput, elevatorSpeed);
+    }
+
+    if(tuneMode){
+      pids[elev].controlPID();
     }
   }
 
