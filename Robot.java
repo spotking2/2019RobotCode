@@ -33,7 +33,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.SRF_PID;
 
 
-public class Robot extends TimedRobot {//v1.6.8
+public class Robot extends TimedRobot {//v1.6.9
   /*
     added some new functionality (elevator raising when wrist goes down and some other stuff)
     also added trouble shooting mini over run timer and did a partial code review  
@@ -123,7 +123,7 @@ public class Robot extends TimedRobot {//v1.6.8
 
   //place holders
   int elevatorNum = 1, rollerNum = 7, wristNum = 2, railNum = 0, vacuumPumpNum = 4, vacuumSensorNum = 0, isolationRelayNum = 0, bleedRelayNum = 1, climberArmNum = 6, climberWinchNum = 5, elevatorHighNum = 0, elevatorLowNum = 1, vacuumThreshold = 1000/*(?)*/, vacuumHatchThreshold = 2000, vacuumReleaseThreshold = 2500, railIn = 0, railOut = 700000/*222000*/;
-  int elevatorHighPosition = -540000/*hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition = 116000/*hatch pickup floor*/, wristMiddlePosition = 56000/* cargo low rocket place*/, wristHighPosition = 0 /*hatch cargoship/low rocket, cargo low*/;
+  int elevatorHighPosition = -540000/*hatch middle*/, elevatorMiddlePosition/*cargo cargoship */, elevatorSemiLowPosition/*prevent scraping off suction cups for floor pickup*/, elevatorLowPosition = 0/*hatch floor/playerstation pickup, hatch place cargoship/low rocket*/, wristUltraLowPosition/* cargo pickup floor*/, wristLowPosition = 116000/*hatch pickup floor*/, wristMiddlePosition = 56000/* cargo low rocket place*/, wristHighPosition = 0 /*hatch cargoship/low rocket, cargo low*/;
   double wristTolerance = 9001, elevatorTolerance, railTolerance;
 
   Timer rumbleTimer = new Timer();
@@ -160,7 +160,7 @@ public class Robot extends TimedRobot {//v1.6.8
 
   boolean inTransition;
   boolean letUpY;
-
+  
   boolean recharging;
 
   boolean isolationHatch;
@@ -188,6 +188,9 @@ public class Robot extends TimedRobot {//v1.6.8
   double wristSpeed = 0;
   int wristTarget;
   boolean elevatorControlModeDone = true;
+
+  boolean codeCripple = false;
+  boolean letUpCripple = false;
 
   @Override
   public void robotInit() {
@@ -285,7 +288,10 @@ public class Robot extends TimedRobot {//v1.6.8
   }
 
   public void disabledPeriodic() {
-
+    SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
+    SmartDashboard.putNumber("Wrist Encoder", wrist.getSelectedSensorPosition());
+    SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
+    SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -352,122 +358,96 @@ public class Robot extends TimedRobot {//v1.6.8
     NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
   }
 
- 
+
 
   @Override
   public void teleopPeriodic() {
     lastLoopTime = loopTimer.get();
 
-    testytest.set(true);
+    //testytest.set(true);
     if(testMode)//SRF_PID get the kP out of that for talon tuning
       SRF_Test();
+    else if(codeCripple)
+      SRF_Cripple();
     else
       SRF_Basic();
+    
+    if(joyTune.getRawButton(2) && letUpCripple) {
+      letUpCripple = false;
       
+      if(codeCripple)
+        codeCripple = false;
+      else
+        codeCripple = true;
+    }
+    else if(!letUpCripple)
+      letUpCripple = true;
+
 
     SmartDashboard.putBoolean("Wrist Control", wristControl);
-    SmartDashboard.putBoolean("Computing?", progCompute);
-    SmartDashboard.putNumber("Elevator Cycle Number",elevatorCycleCount);
-    SmartDashboard.putNumber("Wrist Cycle Number",wristCycleCount);  
+    //SmartDashboard.putBoolean("Computing?", progCompute);
+    //SmartDashboard.putNumber("Elevator Cycle Number",elevatorCycleCount);
+    //SmartDashboard.putNumber("Wrist Cycle Number",wristCycleCount);  
     SmartDashboard.putNumber("vacuumSensor", vacuumSensor.getValue());
     //SmartDashboard.putBoolean("progCancel", progCancel);
     SmartDashboard.putNumber("Wrist Encoder", wrist.getSelectedSensorPosition());
     SmartDashboard.putNumber("Elevator Ennoder", elevator.getSelectedSensorPosition());
     //SmartDashboard.putNumber("Rail Enocder", rail.getSelectedSensorPosition());
-    SmartDashboard.putNumber("kP", pids[pidCount].k[0]);
+    /*SmartDashboard.putNumber("kP", pids[pidCount].k[0]);
     SmartDashboard.putNumber("kI", pids[pidCount].k[1]*1000);
     SmartDashboard.putNumber("kD", pids[pidCount].k[2]);
     SmartDashboard.putNumber("P Multiplier", pids[pidCount].mult[0]);
     SmartDashboard.putNumber("I Multiplier", pids[pidCount].mult[1]);
     SmartDashboard.putNumber("D Multiplier", pids[pidCount].mult[2]);
     SmartDashboard.putNumber("CurrentMode", pids[pidCount].currentMode);
-    SmartDashboard.putNumber("CurrentGain", pids[pidCount].currentGain);
+    SmartDashboard.putNumber("CurrentGain", pids[pidCount].currentGain);*/
     //if(debug)SmartDashboard.putBoolean("HatchPlaceC", inProgresses[progHatchPlaceC]);
     //SmartDashboard.putNumber("targetPosition wrist", targetPositionWrist);
     SmartDashboard.putNumber("Rail Encoder", rail.getSelectedSensorPosition());
     SmartDashboard.putNumber("Overrun count", SRF_OverrunCount);
     SmartDashboard.putBoolean("Correct Vacuum level", vacuumAchieved);
-    SmartDashboard.putBoolean("Close Enough", closeEnough);
+    //SmartDashboard.putBoolean("Close Enough", closeEnough);
     //SmartDashboard.putBoolean("progSmallElevatorRaise", progSmallElevatorRaise);
     //SmartDashboard.putBoolean("elevatorRaiseDone", elevatorRaiseDone);
     SmartDashboard.putBoolean("Control Mode", elevatorControlMode);
     SmartDashboard.putNumber("Wrist Target", wristTarget);
 
-    testytest.set(false);
+    //testytest.set(false);
     
     if(loopTimer.get() > lastLoopTime + 0.02)
       SRF_OverrunCount++;
   }
 
 
-  void SRF_Basic(){
-    //setIsolation(true, false);
-
-    if(Math.abs(NetworkTableInstance.getDefault().getTable("limelight").getEntry("tx").getDouble(0)) < 4)
-      closeEnough = true;
-    else
-      closeEnough = false;    
-
+  void SRF_Cripple(){
     //Climber Code
-    /*if(tuneMode) {
-      if(joyTune.getRawButton(1)){//press A to open climber
-        setIsolation(false, true);
-        setBleed(false);
-      }
+    /*if(joyTune.getRawAxis(5) > .9)
+      climberArm.set(.5);
+    else if(joyTune.getRawAxis(5) < -.9)
+      climberArm.set(-.5);*/
+    if(Math.abs(joyTune.getRawAxis(5)) > 0.2)
+      climberArm.set(joyTune.getRawAxis(5));
+    else
+      climberArm.set(0);
 
-      if(joyTune.getRawAxis(2) > 0.2) {
-        //they move one way
-      }
-      else if(joyTune.getRawAxis(3) > 0.2) {
-        //they move the other way
-      }
-      else {
-        if(Math.abs(joyTune.getRawAxis(1)) > 0.1) {
-          climberArm.set(joyTune.getRawAxis(1));
-        } else {
-          climberArm.set(0);
-        }
-
-        if(Math.abs(joyTune.getRawAxis(5)) > 0.1) {
-          climberWinch.set(joyTune.getRawAxis(5));
-        } else {
-          climberWinch.set(0);
-        }
-
-        if(Math.abs(joyTune.getRawAxis(1)) > 0.1 || Math.abs(joyTune.getRawAxis(5)) > 0.1)
-          vacuumPump.set(1);
-        else
-          vacuumPump.set(0);
-
-      }
-    }*/
-
-    //automated vacuum pump
-    /*if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold && !disableVacPump)
-      recharging = true;
-
-    if(recharging){
-      if(vacuumSensor.getValue() < vacuumThreshold) {
-        recharging = false;
-        vacuumPump.set(0);
-      }
-      else
-        vacuumPump.set(1);
-    }
+    //vacuum pump
+    if(j.getRawButton(2))
+      vacuumPump.set(1);
     else
       vacuumPump.set(0);
-    */
 
+    /* Pointless without being on front instead of inside robot
     if(j.getRawButton(9))
       NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(3);
     else
       NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+    */
 
     if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1) {
-      if(j.getRawButton(2)) //remember to change when B gets messed with, also may just need it straight up taken out for practice bot
-        robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
-      else
-        robot.arcadeDrive(j.getRawAxis(1),0.8*j.getRawAxis(0));
+      //if(j.getRawButton(2)) //remember to change when B gets messed with, also may just need it straight up taken out for practice bot
+      //  robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
+      //else
+        robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
     } else
       robot.arcadeDrive(0, 0);
 
@@ -480,16 +460,136 @@ public class Robot extends TimedRobot {//v1.6.8
       roller.set(-.1);
     }
 
+    //Right Stick Y axis - controls reversed
+    if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable) {
+      if(j.getRawAxis(5) > 0) {
+        wristSpeed = -0.5*j.getRawAxis(5);//comp -.3 - COMPY
+        //wrist.set(ControlMode.PercentOutput, -0.3*j.getRawAxis(5));
+      } else
+        wristSpeed = 0;
+    } else {
+      wristSpeed = 0;
+      //wrist.set(ControlMode.PercentOutput, 0);
+    }
+    
+    //A - bleed valve
+    if(j.getRawButton(1) && !bleedIsSet){
+      setBleed(true);
+      bleedIsSet = true;
+    }
+    else if(!j.getRawButton(1) && bleedIsSet){
+      setBleed(false);
+      bleedIsSet = false;
+    }
+
+    //B - Open Manipulator isolation
+    if(j.getRawButton(2)) 
+      setIsolation(true, false);
+    else
+      setIsolation(false,false);
+
+    //leftBumper - Down, rightBumper - Up
+    if(j.getRawButton(5)) {
+      elevator.set(ControlMode.PercentOutput, .3);//elevator down
+    } else if(j.getRawButton(6)){
+      elevator.set(ControlMode.PercentOutput, -.5);//elevator up
+    } else if(!progSmallElevatorRaise) {
+      elevator.set(ControlMode.PercentOutput, 0);
+    }
+
+    //start, back - Rail
+    if(railEnable && j.getRawButton(7))//railIn
+      rail.set(ControlMode.PercentOutput, 0.8);
+    else if(railEnable && j.getRawButton(8))//railOut
+      rail.set(ControlMode.PercentOutput, -0.3); 
+    else
+      rail.set(ControlMode.PercentOutput, 0);
+
+    //Auto vacuum checking
+    if(vacuumSensor.getValue() < vacuumHatchThreshold)
+      vacuumAchieved = true;
+    else
+      vacuumAchieved = false;
+
+    //Wrist
+    wrist.set(ControlMode.PercentOutput, wristSpeed);
+  }
+
+  ///////////////////////////////////////////////
+  ///////////////////////////////////////////////
+
+  void SRF_Basic(){
+    /* Won't work without it being on the front
+    if(Math.abs(NetworkTableInstance.getDefault().getTable("limelight").getEntry("tx").getDouble(0)) < 4)
+      closeEnough = true;
+    else
+      closeEnough = false;    
+    */
+
+    //Climber Code
+    /*if(joyTune.getRawAxis(5) > .9)
+      climberArm.set(.5);
+    else if(joyTune.getRawAxis(5) < -.9)
+      climberArm.set(-.5);*/
+    if(Math.abs(joyTune.getRawAxis(5)) > 0.2)
+      climberArm.set(joyTune.getRawAxis(5));
+    else
+      climberArm.set(0);
+
+    //automated vacuum pump
+    if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold && !disableVacPump)
+      recharging = true;
+
+    if(recharging){
+      if(vacuumSensor.getValue() < vacuumThreshold) {
+        recharging = false;
+        vacuumPump.set(0);
+      }
+      else
+        vacuumPump.set(1);
+    }
+    else
+      vacuumPump.set(0);
+    
+
+    /* Pointless without being on front instead of inside robot
+    if(j.getRawButton(9))
+      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(3);
+    else
+      NetworkTableInstance.getDefault().getTable("limelight").getEntry("ledMode").setNumber(1);
+    */
+
+    if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1) {
+      //if(j.getRawButton(2)) //remember to change when B gets messed with, also may just need it straight up taken out for practice bot
+      //  robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
+      //else
+        robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
+    } else
+      robot.arcadeDrive(0, 0);
+
+    //left trigger - roller in, right trigger - roller out
+    if(j.getRawAxis(rollerIn) > 0.3) {
+      roller.set(-0.55);
+    } else if(j.getRawAxis(rollerOut) > 0.1) {
+      roller.set(j.getRawAxis(rollerOut));
+    } else {
+      roller.set(-.1);
+    }
+
+    //Right Stick Y axis - controls reversed
     if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable) {
       wristControl = false;
 
       if(wrist.getSelectedSensorPosition() < 142000 || j.getRawAxis(5) > 0) {
-        wristSpeed = -0.3*j.getRawAxis(5);
+        wristSpeed = -0.5*j.getRawAxis(5);//comp -.3 - COMPY
         //wrist.set(ControlMode.PercentOutput, -0.3*j.getRawAxis(5));
-      }
+      } else if(wrist.getSelectedSensorPosition() > 148000)
+        wristSpeed = -0.3;
+      else
+        wristSpeed = 0;
     }
     else if(wrist.getSelectedSensorPosition() > 148000) {
-      wristSpeed = -0.2;
+      wristSpeed = -0.3;
       //wrist.set(ControlMode.PercentOutput, -.2);
     }
     else {
@@ -497,6 +597,7 @@ public class Robot extends TimedRobot {//v1.6.8
       //wrist.set(ControlMode.PercentOutput, 0);
     }
 
+    //Raises elevator a few inches when wrist goes down a bit
     if(!progSmallElevatorRaise && wrist.getSelectedSensorPosition() > 100000 && !elevatorRaiseDone) {
         progSmallElevatorRaise = true;
     }
@@ -508,6 +609,7 @@ public class Robot extends TimedRobot {//v1.6.8
         elevator.set(ControlMode.PercentOutput, 0);
         progSmallElevatorRaise = false;
         elevatorRaiseDone = true;
+        elevatorControlModeTarget = -120000;
       }
     } else if(elevatorRaiseDone && wrist.getSelectedSensorPosition() < 74000){
       elevatorRaiseDone = false;
@@ -530,30 +632,18 @@ public class Robot extends TimedRobot {//v1.6.8
     else
       setIsolation(false,false);
 
-    //B - Vaccum pump
-    /*if(j.getRawButton(2)) //This is pointless as long as we ain't got no relays
-      isolationRelay.set(Value.kForward);
-    else
-      isolationRelay.set(Value.kOff);*/
-    /*if(j.getRawButton((2)))
-      vacuumPump.set(1);
-    else
-      vacuumPump.set(0);*/
-
     //X
     if(j.getRawButton(3)) {
       elevatorControlMode = true;
       elevatorControlModeDone = false;
-      elevatorControlModeTarget = elevatorCargoShip;
-      wristControl = true;
-      wristTarget = 140000;
+      elevatorControlModeTarget = elevatorLowPosition;
+      //wristControl = true;
+      //wristTarget = 140000;
     }
     //Y
     else if(j.getRawButton(4)) {
       elevatorControlMode = true;
       elevatorControlModeTarget = elevatorHighPosition;
-      //wristControl = true;
-      //wristTarget = 1500;
     }
 
     //leftBumper - Down, rightBumper - Up
@@ -571,10 +661,10 @@ public class Robot extends TimedRobot {//v1.6.8
     }
 
     //start, back - Rail
-    if(railEnable && j.getRawButton(7) && rail.getSelectedSensorPosition() < railOut)//railOut
-      rail.set(ControlMode.PercentOutput, -0.3);
-    else if(railEnable && j.getRawButton(8) /*&& rail.getSelectedSensorPosition() > 0*/)//railIn
+    if(railEnable && j.getRawButton(7) /*&& rail.getSelectedSensorPosition() > 0*/)//railIn
       rail.set(ControlMode.PercentOutput, 0.8);
+    else if(railEnable && j.getRawButton(8) && rail.getSelectedSensorPosition() < railOut)//railOut
+      rail.set(ControlMode.PercentOutput, -0.3); 
     else
       rail.set(ControlMode.PercentOutput, 0);
 
@@ -584,6 +674,7 @@ public class Robot extends TimedRobot {//v1.6.8
     else
       vacuumAchieved = false;
 
+    //Auto Elevator
     if(!progSmallElevatorRaise)
     {
       if(elevatorControlMode) {
@@ -595,6 +686,7 @@ public class Robot extends TimedRobot {//v1.6.8
         elevator.set(ControlMode.PercentOutput, elevatorSpeed);
     }
 
+    //Auto Wrist
     if(wristControl && elevatorControlModeDone == true) {
       if(Math.abs(wrist.getSelectedSensorPosition()-wristTarget) < 8000)
         wrist.set(ControlMode.PercentOutput, 0);
@@ -629,7 +721,6 @@ public class Robot extends TimedRobot {//v1.6.8
 
 
   void SRF_Test(){//we can't move in this mode
-    //robot.arcadeDrive(j.getRawAxis(1),j.getRawAxis(0));
 
     if(j.getRawButton(6) && !tuneMode) 
       frontRight.set(.3);
@@ -660,11 +751,6 @@ public class Robot extends TimedRobot {//v1.6.8
     roller.set(0);
   }
 
-    /*if(j.getRawButton(5))
-      climberArm.set(1);
-    else
-      climberArm.set(0);
-*/
     if(j.getRawButton(6) && tuneMode)
       setBleed(true);
     else
@@ -690,11 +776,6 @@ public class Robot extends TimedRobot {//v1.6.8
       wrist.set(ControlMode.PercentOutput, 0.5*j.getRawAxis(5));
     else
       wrist.set(ControlMode.PercentOutput, 0);
-*/
-/*  if(relayOn)
-    bleedRelay.set(Value.kForward);
-  else
-    bleedRelay.set(Value.kOff);
 */
     if(tuneMode && j.getRawButton(3) && letUpCompute) {
       progCompute = true;
@@ -753,7 +834,6 @@ public class Robot extends TimedRobot {//v1.6.8
       letUpWristCycle = true ;
     }
     
-    //MAYBE FOR SRF_CONTROL (well bits of it anyway)
     /////////////////////////////////////////////////////////
     
     if(j.getRawButton(4) && letUpY){
@@ -824,213 +904,6 @@ public class Robot extends TimedRobot {//v1.6.8
       elevator.set(ControlMode.PercentOutput, 0);
 
     SmartDashboard.putNumber("elevator position", elevator.getSelectedSensorPosition());
-    //lastLoopTime = loopTimer.get();
-    //setIsolation(true, false);
-
-    /*if(Math.abs(NetworkTableInstance.getDefault().getTable("limelight").getEntry("tx").getDouble(0)) < 4)
-      closeEnough = true;
-    else
-      closeEnough = false;*/    
-
-    //Climber Code
-    /*if(tuneMode) {
-      if(joyTune.getRawButton(1)){//press A to open climber
-        setIsolation(false, true);
-        setBleed(false);
-      }
-
-      if(joyTune.getRawAxis(2) > 0.2) {
-        //they move one way
-      }
-      else if(joyTune.getRawAxis(3) > 0.2) {
-        //they move the other way
-      }
-      else {
-        if(Math.abs(joyTune.getRawAxis(1)) > 0.1) {
-          climberArm.set(joyTune.getRawAxis(1));
-        } else {
-          climberArm.set(0);
-        }
-
-        if(Math.abs(joyTune.getRawAxis(5)) > 0.1) {
-          climberWinch.set(joyTune.getRawAxis(5));
-        } else {
-          climberWinch.set(0);
-        }
-
-        if(Math.abs(joyTune.getRawAxis(1)) > 0.1 || Math.abs(joyTune.getRawAxis(5)) > 0.1)
-          vacuumPump.set(1);
-        else
-          vacuumPump.set(0);
-
-      }
-    }*/
-
-    //automated vacuum pump
-    /*if(!recharging && vacuumSensor.getValue() > vacuumHatchThreshold && !disableVacPump)
-      recharging = true;
-
-    if(recharging){
-      if(vacuumSensor.getValue() < vacuumThreshold) {
-        recharging = false;
-        vacuumPump.set(0);
-      }
-      else
-        vacuumPump.set(1);
-    }
-    else
-      vacuumPump.set(0);
-    */
-    /*if(Math.abs(j.getRawAxis(0)) > 0.1 || Math.abs(j.getRawAxis(1)) > 0.1) {
-      if(j.getRawButton(3)) //remember to change when B gets messed with, also may just need it straight up taken out for practice bot
-        robot.arcadeDrive(.8*j.getRawAxis(1),0.5*j.getRawAxis(0));
-      else
-        robot.arcadeDrive(j.getRawAxis(1),0.8*j.getRawAxis(0));
-    } else
-      robot.arcadeDrive(0, 0);
-    */
-    //left trigger - roller in, right trigger - roller out
-    /*if(j.getRawAxis(rollerIn) > 0.3) {
-      roller.set(-0.55);
-    } else if(j.getRawAxis(rollerOut) > 0.1) {
-      roller.set(j.getRawAxis(rollerOut));
-    } else {
-      roller.set(-.1);
-    }*/
-    /*
-    if(Math.abs(j.getRawAxis(5)) > 0.2 && wristEnable) {
-      if(wrist.getSelectedSensorPosition() < 142000 || j.getRawAxis(5) > 0)
-        wrist.set(ControlMode.PercentOutput, -0.3*j.getRawAxis(5));
-      else if(wrist.getSelectedSensorPosition() > 148000)
-        wrist.set(ControlMode.PercentOutput, -.2);
-      else
-        wrist.set(ControlMode.PercentOutput, 0);
-
-      if(!progSmallElevatorRaise && wrist.getSelectedSensorPosition() > 100000 && !elevatorRaiseDone)
-        progSmallElevatorRaise = true;
-    } else
-      wrist.set(ControlMode.PercentOutput, 0);
-    */
-    /*if(progSmallElevatorRaise) {
-      if(elevator.getSelectedSensorPosition() > -120000/*target - 120000 *///)
-        /*elevator.set(ControlMode.PercentOutput, -.6);
-      else {
-        elevator.set(ControlMode.PercentOutput, 0);
-        progSmallElevatorRaise = false;
-        elevatorRaiseDone = true;
-      }
-    } else if(elevatorRaiseDone && wrist.getSelectedSensorPosition() < 74000){
-      elevatorRaiseDone = false;
-    } */ 
-
-    //XXX-try taking out bleedIsSet!!!
-    //A - bleed valve
-    /*if(j.getRawButton(1) && !bleedIsSet){
-      setBleed(true);
-      bleedIsSet = true;
-    }
-    else if(!j.getRawButton(1) && bleedIsSet){
-      setBleed(false);
-      bleedIsSet = false;
-    }
-
-    //B - Open Manipulator isolation
-    if(j.getRawButton(2)) 
-      setIsolation(true, false);
-     else 
-      setIsolation(false,false);
-    */
-    //B - Vaccum pump
-    /*if(j.getRawButton(2)) //This is pointless as long as we ain't got no relays
-      isolationRelay.set(Value.kForward);
-    else
-      isolationRelay.set(Value.kOff);*/
-    /*if(j.getRawButton((2)))
-      vacuumPump.set(1);
-    else
-      vacuumPump.set(0);*/
-
-    //leftBumper - Down, rightBumper - Up
-    /*if(j.getRawButton(5) /*&& elevator.getSelectedSensorPosition() < 0*//*) {
-      elevator.set(ControlMode.PercentOutput, .3);//elevator down
-    } else if(j.getRawButton(6) && elevator.getSelectedSensorPosition() > -590000){
-      elevator.set(ControlMode.PercentOutput, -.5);//elevator up
-    } else if(!progSmallElevatorRaise) {
-      elevator.set(ControlMode.PercentOutput, 0);
-    }*/
-
-    //start, back - Rail
-    /*if(railEnable && j.getRawButton(7) && rail.getSelectedSensorPosition() < railOut)//railOut
-      rail.set(ControlMode.PercentOutput, -0.3);
-    else if(railEnable && j.getRawButton(8) /*&& rail.getSelectedSensorPosition() > 0*///)//railIn
-    /*  rail.set(ControlMode.PercentOutput, 0.8);
-    else
-      rail.set(ControlMode.PercentOutput, 0);
-    */
-    //Auto vacuum checking
-    /*if(vacuumSensor.getValue() < vacuumHatchThreshold)
-      vacuumAchieved = true;
-    else
-      vacuumAchieved = false;
-    */
-
-
-
-
-    /*if(joyTune.getRawButton(1)){//press A to open climber
-      setIsolation(false,true);
-      setBleed(false);
-    }*/
-
-   /* if(joyTune.getRawAxis(2) > 0.2) {
-      //they move one way
-    }
-    else if(joyTune.getRawAxis(3) > 0.2) {
-      //they move the other way
-    }
-    else*//* {
-      if(Math.abs(joyTune.getRawAxis(1)) > 0.1) {
-        climberArm.set(joyTune.getRawAxis(1));
-      } else {
-        climberArm.set(0);
-      }
-
-      if(Math.abs(joyTune.getRawAxis(5)) > 0.1) {
-        climberWinch.set(joyTune.getRawAxis(5));
-      } else {
-        climberWinch.set(0);
-      }
-      */
-      //SmartDashboard.putNumber("vacuum sensor", vacuumSensor.getValue());
-
-      //if(Math.abs(joyTune.getRawAxis(1)) > 0.1 || Math.abs(joyTune.getRawAxis(5)) > 0.1)
-      /*if(joyTune.getRawButton(2))
-        vacuumPump.set(1);
-      else
-        vacuumPump.set(0);
-    }*/
-    /*
-    if(j.getRawButton(1))
-      setBleed(true);
-    else
-      setBleed(false);
-    
-    if(j.getRawButton(2))
-      setIsolation(true, false);
-    else if(j.getRawButton(3))
-      setIsolation(false, true);
-    else
-      setIsolation(false, false);
-
-    if(j.getRawButton(4))
-      vacuumPump.set(1);
-    else
-      vacuumPump.set(0);*//*
-    if(loopTimer.get() > lastLoopTime + 0.02)
-      SRF_OverrunCount++;
-
-    SmartDashboard.putNumber("Overrun count", SRF_OverrunCount);*/
   }
-
 }
 
